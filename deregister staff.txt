@@ -1,0 +1,9 @@
+2025-08-15,Alejandro Tejeda Izquierdo,10195,AT195,AX - Eliminado de TXT y MySQL
+2025-08-15,Alejandro Tejeda Izquierdo,10195,AT195,AX - Eliminado de TXT y MySQL
+
+None - Eliminado de TXT y MySQL
+2025-08-19,Alejandro Tejeda Izquierdo,10195,AT195,AT - Eliminado de TXT y MySQL
+2025-08-19,Carlos Maciel Valadez,176,cm176,CM - Baja sincronizada con MySQL
+2025-08-19,Alejandro Tejeda Izquierdo,10195,AT195,AT - Baja sincronizada con MySQL
+2025-08-19,Pedro Guardado,187,187bs,PG - Baja sincronizada con MySQL
+2025-08-19,fER,3,RR,RR - Ya no existe en MySQL, marcado como sincronizado
