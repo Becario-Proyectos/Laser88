@@ -7,3 +7,11 @@ None - Eliminado de TXT y MySQL
 2025-08-19,Alejandro Tejeda Izquierdo,10195,AT195,AT - Baja sincronizada con MySQL
 2025-08-19,Pedro Guardado,187,187bs,PG - Baja sincronizada con MySQL
 2025-08-19,fER,3,RR,RR - Ya no existe en MySQL, marcado como sincronizado
+2025-08-20,Test,1,rr,RT - Eliminado de TXT y MySQL
+2025-08-20,tE,1,RR,RR - Eliminado de TXT y MySQL
+2025-08-20,BORRARE,6,YY,YU - Ya no existe en MySQL, marcado como sincronizado
+2025-08-20,OFFLINE,1,EE,EE - Eliminado de TXT y MySQL
+2025-08-20,BORRAR,2,YY,YY - Eliminado de TXT y MySQL
+2025-08-20,L,3,LL,LL - Eliminado de TXT y MySQL
+2025-08-20,ee,1,EE,EE - Eliminado de TXT y MySQL
+2025-08-20,RR,2,R,RR - Eliminado de TXT y MySQL

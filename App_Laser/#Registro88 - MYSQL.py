@@ -12,26 +12,25 @@ import shutil
 import threading
 import time
 
-# ------------------------------------------------ RUTA Y ACCESO LOGIN------------------------------
+# ------------------------------------------------ RUTAS DE ARCHIVOS ------------------------------
 NOMBRE_ARCHIVO_REGISTROS = "C:/VCST/Aplicaciones/DB_Registro.txt"
 NOMBRE_ARCHIVO_PARTES = "C:/VCST/Aplicaciones/DB_Partes.txt"
 NOMBRE_ARCHIVO_BAJAS = "C:/VCST/Aplicaciones/deregister staff.txt"
 CLAVE_PATH = "C:/VCST/Aplicaciones/clave2.key" 
 
-# Archivo de bajas de partes (log histórico, como deregister staff)
 NOMBRE_ARCHIVO_BAJAS_PARTES_LOG = "C:/VCST/Aplicaciones/deregister parts.txt"
 NOMBRE_ARCHIVO_REGISTROS_PENDIENTES = "C:/VCST/Aplicaciones/DB_Registro_pendiente.txt"
 NOMBRE_ARCHIVO_BAJAS_PENDIENTES = "C:/VCST/Aplicaciones/DB_Bajas_pendiente.txt"
-# Archivo de bajas pendientes para partes
-# Archivo de altas pendientes para partes
+
 NOMBRE_ARCHIVO_PARTES_PENDIENTES = "C:/VCST/Aplicaciones/DB_Partes_pendiente.txt"
 NOMBRE_ARCHIVO_BAJAS_PARTES_PENDIENTES = "C:/VCST/Aplicaciones/DB_Bajas_partes_pendiente.txt"
 
-USUARIO_ADMIN = "ADMIN"
-PASSWORD_ADMIN = "PASSWORD"
-
 # --------------------------------------- RUTA DE LA IMAGEN  ---------------------------
 IMAGE_LOGO_PATH = "C:/VCST/Aplicaciones/logo_dragon.png"
+
+#LOGIN
+USUARIO_ADMIN = "ADMIN"
+PASSWORD_ADMIN = "PASSWORD"
 
 # ------------------------------ CONFIGURACIÓN DE LA BASE DE DATOS MYSQL ---------------
 DB_HOST = "10.4.0.103"
@@ -463,8 +462,6 @@ def check_duplicate_personal(nombre_nuevo, numero_registro_nuevo, codigo_nuevo):
             # Formato esperado: fecha,nombre,numero_registro,password,codigo_doss_letras
             parts = line.split(',')
             
-            # --- Ajuste para el formato de tu TXT con comas en el nombre ---
-            # Busca el índice del número de registro (asumiendo que es un INT)
             num_index = -1
             for i in range(2, len(parts)): # Empezar desde el 2do elemento para buscar el numero
                 if parts[i].strip().isdigit():
@@ -501,9 +498,9 @@ def check_duplicate_personal(nombre_nuevo, numero_registro_nuevo, codigo_nuevo):
 def create_mysql_database_and_tables(cursor):
     try:
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME}")
-        print(f"Base de datos MySQL '{DB_NAME}' verificada/creada exitosamente.")
+        #print(f"Base de datos MySQL '{DB_NAME}' verificada/creada exitosamente.")
         cursor.execute(f"USE {DB_NAME}")
-        print(f"Usando la base de datos MySQL '{DB_NAME}'.")
+        #print(f"Usando la base de datos MySQL '{DB_NAME}'.")
 
         # Tabla para personal
         cursor.execute(f"""
@@ -516,7 +513,7 @@ def create_mysql_database_and_tables(cursor):
                 PRIMARY KEY (Numero)
             )
         """)
-        print(f"Tabla MySQL '{TABLE_NAME_PERSONAL}' verificada/creada exitosamente.")
+        #print(f"Tabla MySQL '{TABLE_NAME_PERSONAL}' verificada/creada exitosamente.")
 
         # Nueva tabla para registro_partes
         cursor.execute(f"""
@@ -528,7 +525,7 @@ def create_mysql_database_and_tables(cursor):
                 PRIMARY KEY (Numero_CAT)
             ) 
         """)
-        print(f"Tabla MySQL '{TABLE_NAME_PARTES}' verificada/creada exitosamente.")
+        #print(f"Tabla MySQL '{TABLE_NAME_PARTES}' verificada/creada exitosamente.")
 
     except mysql.connector.Error as err:
         
@@ -583,6 +580,12 @@ def insert_data_into_mysql_personal(fecha, nombre, numero, password, code_laser)
 def dar_de_baja_personal():
     safe_backup(NOMBRE_ARCHIVO_REGISTROS)
 
+
+    # Restaurar el uso original de simpledialog.askstring y centrar root_main antes
+    root_main.update_idletasks()
+    x = root_main.winfo_screenwidth() // 2 - root_main.winfo_width() // 2
+    y = root_main.winfo_screenheight() // 2 - root_main.winfo_height() // 2
+    root_main.geometry(f"+{x}+{y}")
     numero_a_borrar = tk.simpledialog.askstring("Baja de Personal", "Ingrese el número de registro a dar de baja \t", parent=root_main)
     if numero_a_borrar is None:
         return
@@ -849,9 +852,7 @@ def registrar_datos_partes():
     if not all(x.isalnum() or x == '-' for x in numero_cat):
         messagebox.showwarning("Entrada no válida", "El número CAT solo debe contener letras, números y guiones.")
         return
-    
-    # --- AHORA SÓLO SE VERIFICA EN MYSQL, NO EN EL TXT ---
-    # La validación de unicidad de numero_cat se hace dentro de `insert_data_into_mysql_partes`.
+
     
     # Insertar en MySQL
     if not insert_data_into_mysql_partes(fecha_actual, hora_actual, numero_parte, numero_cat):
@@ -1228,7 +1229,7 @@ def show_parts_registration_screen():
 def dar_de_baja_parte():
     safe_backup(NOMBRE_ARCHIVO_PARTES)
 
-    numero_cat_a_borrar = tk.simpledialog.askstring("Baja de Parte", "Ingrese el número CAT a dar de baja:", parent=parts_window)
+    numero_cat_a_borrar = tk.simpledialog.askstring("Baja de Parte", "Ingrese el número CAT a dar de baja", parent=parts_window)
     if numero_cat_a_borrar is None:
         return
     numero_cat_a_borrar = numero_cat_a_borrar.strip()
@@ -1369,18 +1370,10 @@ def dar_de_baja_parte():
         messagebox.showinfo("Éxito", f"Se dio de baja correctamente el número CAT {numero_cat_a_borrar}.", parent=parts_window)
         return
 
-    # Nueva fila para el botón Regresar a Opciones
-    regresar_frame_parts = tk.Frame(parts_window, bg=COLOR_PRIMARY)
-    regresar_frame_parts.pack(pady=(10, 0))
-    tk.Button(regresar_frame_parts, text="Regresar a Opcio56nes",
-              command=back_to_options,
-              bg=COLOR_DANGER, fg=COLOR_TEXT_LIGHT, font=FONT_BUTTONS, width=25, height=2,
-              cursor="hand2", bd=2, relief="raised").pack()
-
-
 # -----------------------------------------MOSTRAR DB SCREEN (PERSONAL) -----------------
 def show_database_screen():
     import tkinter.ttk as ttk
+    # (Eliminado forzar tema 'clam')
     db_window = tk.Toplevel(root_main)
     db_window.title("Base de Datos Personal")
     db_window.geometry("650x600")  # Reducido el ancho
@@ -1424,14 +1417,36 @@ def show_database_screen():
     tree_mysql.configure(yscrollcommand=vsb_mysql.set)
     mysql_table_frame.grid_rowconfigure(0, weight=1)
     mysql_table_frame.grid_columnconfigure(0, weight=1)
-    for col, text in zip(columns, ["Fecha", "Nombre", "Número", "Contraseña", "Code Laser"]):
-        tree_mysql.heading(col, text=text, anchor="center")
-        tree_mysql.column(col, anchor="center")
+    # Encabezados y columnas con stretch=True
+    tree_mysql.heading("fecha", text="Fecha", anchor="center")
+    tree_mysql.heading("nombre", text="Nombre", anchor="center")
+    tree_mysql.heading("numero", text="Número", anchor="center")
+    tree_mysql.heading("password", text="Contraseña", anchor="center")
+    tree_mysql.heading("code", text="Code Laser", anchor="center")
+    tree_mysql.column("fecha", anchor="center", width=80, minwidth=60, stretch=True)
+    tree_mysql.column("nombre", anchor="center", width=238, minwidth=100, stretch=True)
+    tree_mysql.column("numero", anchor="center", width=80, minwidth=60, stretch=True)
+    tree_mysql.column("password", anchor="center", width=100, minwidth=80, stretch=True)
+    tree_mysql.column("code", anchor="center", width=83, minwidth=60, stretch=True)
+
+    def resize_columns(event=None):
+        total_width = tree_mysql.winfo_width()
+        # Proporciones aproximadas para cada columna
+        col_props = [0.15, 0.38, 0.13, 0.18, 0.16]
+        for i, col in enumerate(columns):
+            tree_mysql.column(col, width=int(total_width * col_props[i]))
+    tree_mysql.bind('<Configure>', resize_columns)
 
     # --- MOSTRAR DATOS ---
     def mostrar_datos(filtro, show_popup_if_empty=False):
         for row in tree_mysql.get_children():
             tree_mysql.delete(row)
+
+        # Zebra Style robusto
+        style = ttk.Style()
+        style.map("Treeview", background=[('selected', "#0261B9")])
+        style.configure("OddRow.Treeview", background="#82C0FF", foreground=COLOR_TEXT_LIGHT)
+        style.configure("EvenRow.Treeview", background="#FFFFFF", foreground=COLOR_TEXT_DARK)
 
         conn_mysql = None
         mycursor = None
@@ -1448,12 +1463,10 @@ def show_database_screen():
             mysql_records = mycursor.fetchall()
             mysql_sep.config(text=" DATOS DESDE MYSQL ")
         except Exception:
-            # Si falla MySQL, usar TXT cifrado y PENDIENTES, y filtrar bajas pendientes
             datos_desde_txt = True
             registros = leer_registros_descifrados(NOMBRE_ARCHIVO_REGISTROS)
             pendientes = leer_registros_descifrados(NOMBRE_ARCHIVO_REGISTROS_PENDIENTES)
             bajas_pendientes = leer_registros_descifrados(NOMBRE_ARCHIVO_BAJAS_PENDIENTES)
-            
             numeros_baja = set()
             for linea in bajas_pendientes:
                 if linea.startswith("ERROR:") or not linea.strip():
@@ -1461,22 +1474,19 @@ def show_database_screen():
                 partes = linea.split(",")
                 if len(partes) >= 3 and partes[2].strip().isdigit():
                     numeros_baja.add(partes[2].strip())
-            
             todos = []
             for linea in registros + pendientes:
                 if linea.startswith("ERROR:") or not linea.strip():
                     continue
                 partes = linea.split(",")
                 if len(partes) >= 3 and partes[2].strip() in numeros_baja:
-                    continue  
+                    continue
                 todos.append(linea)
-            # Convertir a formato de columnas
             mysql_records = []
             for linea in todos:
                 partes = linea.split(",")
                 if len(partes) < 5:
                     continue
-                # Buscar índice del número (puede haber comas en el nombre)
                 num_index = -1
                 for i in range(2, len(partes)):
                     if partes[i].strip().isdigit():
@@ -1503,40 +1513,28 @@ def show_database_screen():
                 except Exception:
                     pass
 
-        # Filtrar si hay filtro
         if filtro:
             filtro = filtro.lower()
             mysql_records = [row for row in mysql_records if any(filtro in str(col).lower() for col in row)]
 
-        # Mostrar datos o mensaje si no hay resultados
         if not mysql_records:
             tree_mysql.insert("", "end", values=("", "", "", "", ""))
             if show_popup_if_empty:
                 messagebox.showinfo("Sin resultados", "Tu búsqueda no arrojó resultados.", parent=db_window)
         else:
             for idx, row in enumerate(mysql_records):
-                tree_mysql.insert("", "end", values=row, tags=("OddRow" if idx % 2 == 0 else "EvenRow",))
+                tag = "OddRow" if idx % 2 == 0 else "EvenRow"
+                iid = tree_mysql.insert("", "end", values=row, tags=(tag,))
+                # Forzar color directo (workaround)
+                tree_mysql.item(iid, tags=(tag,))
+            tree_mysql.tag_configure("OddRow", background="#DFEBFF", foreground=COLOR_TEXT_LIGHT)
+            tree_mysql.tag_configure("EvenRow", background="#FFFFFF", foreground=COLOR_TEXT_DARK)
+            # Forzar el estilo ttk.Style
+            for idx, iid in enumerate(tree_mysql.get_children()):
+                tag = "OddRow" if idx % 2 == 0 else "EvenRow"
+                tree_mysql.item(iid, tags=(tag,))
 
-        # Ajustar ancho de columnas automáticamente para la tabla
-        col_widths = {
-            "fecha": 120,
-            "nombre": 420,
-            "numero": 140,
-            "password": 150,
-            "code": 80
-        }
-        for col in columns:
-            tree_mysql.column(col, width=col_widths.get(col, 120), minwidth=80, stretch=True, anchor="center")
-        tree_mysql.update_idletasks()
-        for col in columns:
-            maxw = max([
-                tree_mysql.bbox(item, col)[2] if tree_mysql.bbox(item, col) else col_widths.get(col, 120)
-                for item in tree_mysql.get_children()
-            ] + [col_widths.get(col, 120)])
-            tree_mysql.column(col, width=max(maxw+30, col_widths.get(col, 120)))
-
-        tree_mysql.tag_configure("OddRow", background="#F8F8F8", foreground=COLOR_TEXT_DARK)
-        tree_mysql.tag_configure("EvenRow", background="#E0E6F8", foreground=COLOR_TEXT_DARK)
+    # No ajustar anchos aquí: los anchos fijos se definen solo una vez arriba
 
     # --- Búsqueda y eventos ---
     def do_search(event=None):
@@ -1587,8 +1585,9 @@ def ensure_txt_for_write(path, cache_lines, sync_fn):
 def show_parts_database_screen():
 
     db_parts_window = tk.Toplevel(root_main)
+    # (Eliminado forzar tema 'clam')
     db_parts_window.title("Base de Datos Partes")
-    db_parts_window.geometry("650x600")
+    db_parts_window.geometry("560x600")
     db_parts_window.grab_set()
 
     db_parts_window.update_idletasks()
@@ -1607,7 +1606,7 @@ def show_parts_database_screen():
     search_frame.pack(fill="x", pady=(0, 5))
     tk.Label(search_frame, text="Buscar:", font=FONT_LABELS, bg=COLOR_SECONDARY, fg=COLOR_TEXT_DARK).pack(side="left", padx=(0, 5))
     search_var = tk.StringVar()
-    entry_search = tk.Entry(search_frame, textvariable=search_var, font=FONT_ENTRY, width=30)
+    entry_search = tk.Entry(search_frame, textvariable=search_var, font=FONT_ENTRY, width=20)
     entry_search.pack(side="left", padx=(0, 5))
     def do_search(event=None):
         filtro = search_var.get().strip().lower()
@@ -1652,14 +1651,27 @@ def show_parts_database_screen():
     tree_mysql.configure(yscrollcommand=vsb_mysql.set)
     mysql_table_frame.grid_rowconfigure(0, weight=1)
     mysql_table_frame.grid_columnconfigure(0, weight=1)
-    for col, text in zip(columns, ["Fecha", "Hora", "Número de Parte", "Número CAT"]):
+    for col, text, width, prop in zip(columns, ["Fecha", "Hora", "Número de Parte", "Número CAT"], [100, 90, 180, 120], [0.18, 0.18, 0.38, 0.26]):
         tree_mysql.heading(col, text=text, anchor="center")
-        tree_mysql.column(col, anchor="center")
+        tree_mysql.column(col, anchor="center", width=width, minwidth=60, stretch=True)
+
+    def resize_columns(event=None):
+        total_width = tree_mysql.winfo_width()
+        col_props = [0.18, 0.18, 0.38, 0.26]
+        for i, col in enumerate(columns):
+            tree_mysql.column(col, width=int(total_width * col_props[i]))
+    tree_mysql.bind('<Configure>', resize_columns)
 
     # --- Función para mostrar datos filtrados MYSQL u OFFLINE ---
     def mostrar_datos(filtro, show_popup_if_empty=False):
         for row in tree_mysql.get_children():
             tree_mysql.delete(row)
+
+        # Zebra Style igual que personal
+        style = ttk.Style()
+        style.map("Treeview", background=[('selected', "#0261B9")])
+        style.configure("OddRow.Treeview", background="#82C0FF", foreground=COLOR_TEXT_LIGHT)
+        style.configure("EvenRow.Treeview", background="#FFFFFF", foreground=COLOR_TEXT_DARK)
 
         conn_mysql = None
         mycursor = None
@@ -1675,11 +1687,9 @@ def show_parts_database_screen():
             mysql_records = mycursor.fetchall()
             mysql_sep.config(text=" DATOS DESDE MYSQL ")
         except Exception:
-            # Si falla MySQL, usar TXT cifrado y PENDIENTES, y filtrar bajas pendientes
             registros = leer_registros_descifrados(NOMBRE_ARCHIVO_PARTES)
             pendientes = leer_registros_descifrados(NOMBRE_ARCHIVO_PARTES_PENDIENTES)
             bajas_pendientes = leer_registros_descifrados(NOMBRE_ARCHIVO_BAJAS_PARTES_PENDIENTES)
-
             numeros_cat_baja = set()
             for linea in bajas_pendientes:
                 if linea.startswith("ERROR:") or not linea.strip():
@@ -1687,16 +1697,14 @@ def show_parts_database_screen():
                 partes = linea.split(",")
                 if len(partes) >= 4:
                     numeros_cat_baja.add(partes[3].strip())
-
             todos = []
             for linea in registros + pendientes:
                 if linea.startswith("ERROR:") or not linea.strip():
                     continue
                 partes = linea.split(",")
                 if len(partes) >= 4 and partes[3].strip() in numeros_cat_baja:
-                    continue  # Omitir si está en bajas pendientes
+                    continue
                 todos.append(linea)
-            # Convertir a formato de columnas
             mysql_records = []
             for linea in todos:
                 partes = linea.split(",")
@@ -1720,39 +1728,26 @@ def show_parts_database_screen():
                 except Exception:
                     pass
 
-        # Filtrar si hay filtro
         if filtro:
             filtro = filtro.lower()
             mysql_records = [row for row in mysql_records if any(filtro in str(col).lower() for col in row)]
 
-        # Mostrar datos o mensaje si no hay resultados
         if not mysql_records:
             tree_mysql.insert("", "end", values=("", "", "", ""))
             if show_popup_if_empty:
                 messagebox.showinfo("Sin resultados", "Tu búsqueda no arrojó resultados.", parent=db_parts_window)
         else:
             for idx, row in enumerate(mysql_records):
-                tree_mysql.insert("", "end", values=row, tags=("OddRow" if idx % 2 == 0 else "EvenRow",))
+                tag = "OddRow" if idx % 2 == 0 else "EvenRow"
+                iid = tree_mysql.insert("", "end", values=row, tags=(tag,))
+                tree_mysql.item(iid, tags=(tag,))
+            tree_mysql.tag_configure("OddRow", background="#DFEBFF", foreground=COLOR_TEXT_LIGHT)
+            tree_mysql.tag_configure("EvenRow", background="#FFFFFF", foreground=COLOR_TEXT_DARK)
+            for idx, iid in enumerate(tree_mysql.get_children()):
+                tag = "OddRow" if idx % 2 == 0 else "EvenRow"
+                tree_mysql.item(iid, tags=(tag,))
 
-        # Ajustar ancho de columnas automáticamente para la tabla
-        col_widths = {
-            "fecha": 120,
-            "hora": 120,
-            "numero_parte": 300,
-            "numero_cat": 200
-        }
-        for col in columns:
-            tree_mysql.column(col, width=col_widths.get(col, 120), minwidth=80, stretch=True, anchor="center")
-        tree_mysql.update_idletasks()
-        for col in columns:
-            maxw = max([
-                tree_mysql.bbox(item, col)[2] if tree_mysql.bbox(item, col) else col_widths.get(col, 120)
-                for item in tree_mysql.get_children()
-            ] + [col_widths.get(col, 120)])
-            tree_mysql.column(col, width=max(maxw+30, col_widths.get(col, 120)))
-
-        tree_mysql.tag_configure("OddRow", background="#F8F8F8", foreground=COLOR_TEXT_DARK)
-        tree_mysql.tag_configure("EvenRow", background="#E0E6F8", foreground=COLOR_TEXT_DARK)
+    # No ajustar anchos aquí: los anchos fijos se definen solo una vez arriba
 
     mostrar_datos("")
 
