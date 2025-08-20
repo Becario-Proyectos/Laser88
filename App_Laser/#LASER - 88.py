@@ -1,0 +1,1105 @@
+# appLaserV16 - Heartbeat 1->0 por ciclo + Login MySQL/TXT cifrado
+import tkinter as tk
+from tkinter import messagebox, filedialog, scrolledtext
+import os
+from datetime import datetime
+import sys
+import time
+import snap7
+import threading
+import tkinter.ttk as ttk
+import csv
+from cryptography.fernet import Fernet
+import mysql.connector
+
+# ----------------------------- RUTAS / ARCHIVOS -----------------------------
+NOMBRE_ARCHIVO_REGISTROS = "C:/VCST/Aplicaciones/DB_Registro.txt"  # TXT cifrado (respaldo)
+NOMBRE_ARCHIVO_PARTES   = "C:/VCST/Aplicaciones/DB_Partes.txt"
+
+NOMBRE_ARCHIVO_LOGS     = "C:/VCST/Aplicaciones/App_Laser/Logs/App_Logs.txt"
+LASER_CODE_FILE_PATH    = "C:/VCST/Aplicaciones/App_Laser/active_laser_code.csv"
+PRODUCT_LOG_FILE_PATH   = "C:/VCST/Aplicaciones/App_Laser/App_Logs/Product_Log.csv"
+CLAVE_PATH              = "C:/VCST/Aplicaciones/clave2.key"       
+
+# ------------------------------- PLC CONFIG ---------------------------------
+PLC_IP = '192.168.21.50'
+RACK = 0
+SLOT = 1
+DB_NUMBER = 17
+READ_INTERVAL_SECONDS = 2
+
+# Heartbeat en DBX1.0 (DBB1 completo)
+HEARTBEAT_DB = DB_NUMBER
+HEARTBEAT_BYTE_OFFSET = 1    
+HB_PULSE_SECONDS = 0.10      
+
+# --------------------------------- COLORES ----------------------------------
+COLOR_BACKGROUND_PRIMARY   = "#2C3E50"
+COLOR_BACKGROUND_SECONDARY = "#34495E"
+COLOR_BACKGROUND_TERTIARY  = "#4A627A"
+
+COLOR_TEXT_PRIMARY = "#ECF0F1"
+COLOR_TEXT_LIGHT   = "#ECF0F1"
+COLOR_TEXT_MUTED   = "#BDC7BD"
+COLOR_ACCENT_BLUE  = "#FFFFFF"
+COLOR_SUCCESS_GREEN= "#00FF22"
+COLOR_DANGER_RED   = "#FF3131"
+COLOR_BORDER_SUBTLE= "#5A738D"
+COLOR_FOCUS_BORDER = "#3498DB"
+
+COLOR_PLC_CONNECTED    = "#00FF22"
+COLOR_PLC_DISCONNECTED = "#ED1919"
+COLOR_PLC_WARNING      = "#F1C40F"
+
+COLOR_SUBMENU_BACKGROUND = "#D3D3D3"
+COLOR_SUBMENU_FOREGROUND = "#000000"
+
+# ---------------------------------- FUENTES ---------------------------------
+FONT_TITLE_APP       = ("Segoe UI", 28, "bold")
+FONT_SECTION_HEADER  = ("Segoe UI", 14, "bold")
+FONT_LABEL           = ("Segoe UI", 13, "bold")
+FONT_LABEL_BOLD      = ("Segoe UI", 13, "bold")
+FONT_ENTRY           = ("Segoe UI", 13)
+FONT_BUTTON          = ("Segoe UI", 13, "bold")
+FONT_STATUS_INFO     = ("Consolas", 18, "bold")
+FONT_STATUS_ERROR    = ("Consolas", 18, "bold")
+
+# ------------------------------- GLOBALES GUI -------------------------------
+root_machine_app = None
+login_successful_machine = False
+
+plc_client = None
+monitoring_thread = None
+stop_monitoring_event = threading.Event()
+
+last_read_product_counter = None
+last_product_time = None
+last_plc_connection_status = False
+plc_disconnection_time = None
+
+plc_status_text_var = None
+plc_connection_indicator_canvas = None
+plc_connection_indicator_oval_id = None
+plc_last_update_label_var = None
+plc_error_label_widget = None
+plc_status_label_widget = None
+
+product_id_var = None
+product_counter_var = None
+product_read_time_display_var = None
+product_height_var = None
+
+measurement2_var = None
+measurement3_var = None
+measurement4_var = None
+additional_info1_var = None
+additional_info2_var = None
+serial_number_var = None
+
+logged_in_user_name_global = None
+logged_in_laser_code_global = None
+logged_in_datetime_global = None
+
+download_menu_instance = None
+logs_menu_instance = None
+
+# ------------------------- MySQL CONFIG / TABLAS ----------------------------
+DB_HOST = "10.4.0.22"
+DB_USER = "wamp_user"
+DB_PASSWORD = "W4mp_us3r_CAT"
+DB_NAME = "Caterpillar_laserdatabase"
+
+TABLE_USERS       = "registered_personnel"   # credenciales ya existentes
+# (las tablas de snapshots/producto se pueden crear después si lo necesitas)
+
+# =============================== UTILIDADES LOG =============================
+def write_log(event_type, message):
+    try:
+        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(NOMBRE_ARCHIVO_LOGS, "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] [{event_type}] {message}\n")
+    except Exception as e:
+        try:
+            messagebox.showerror("Error de Logs",
+                                 f"No se pudo escribir en logs:\n{NOMBRE_ARCHIVO_LOGS}\n\n{e}",
+                                 parent=root_machine_app)
+        except:
+            pass
+
+def read_logs():
+    if not os.path.exists(NOMBRE_ARCHIVO_LOGS):
+        return ["No hay registros previos."]
+    try:
+        with open(NOMBRE_ARCHIVO_LOGS, "r", encoding="utf-8", errors="replace") as f:
+            return [x.rstrip("\n") for x in f.readlines()]
+    except Exception as e:
+        return [f"Error al leer logs: {e}"]
+
+# ============================== CONEXIÓN MySQL ==============================
+def _mysql_get_conn():
+    try:
+        return mysql.connector.connect(
+            host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME
+        )
+    except Exception:
+        return None
+
+def _mysql_init_schema():
+    """Sólo asegura la existencia de la BD (no trona si no hay servidor)."""
+    try:
+        root = mysql.connector.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD)
+        cur = root.cursor()
+        cur.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME}")
+        cur.close(); root.close()
+    except Exception as e:
+        write_log("ERROR", f"Init schema error: {e}")
+
+def check_credentials_from_mysql(numero_registro_input, password_input):
+    conn = _mysql_get_conn()
+    if not conn:
+        return None, None
+    try:
+        cur = conn.cursor()
+        # Ajusta los nombres de columnas si difieren en tu tabla
+        cur.execute(
+            "SELECT Nombre, Code_Laser FROM registered_personnel WHERE Numero=%s AND Password=%s",
+            (int(numero_registro_input), password_input)
+        )
+        row = cur.fetchone()
+        cur.close(); conn.close()
+        if row:
+            return True, (row[0], row[1])
+        return False, None
+    except Exception as e:
+        write_log("ERROR", f"Login MySQL error: {e}")
+        try:
+            cur.close(); conn.close()
+        except:
+            pass
+        return None, None
+
+# =========================== TXT CIFRADO (Fernet) ===========================
+def load_key():
+    try:
+        with open(CLAVE_PATH, "rb") as f:
+            return f.read()
+    except Exception as e:
+        messagebox.showerror("Clave de cifrado",
+                             f"No se pudo cargar la clave:\n{CLAVE_PATH}\n\n{e}",
+                             parent=root_machine_app)
+        return None
+
+def leer_registros_descifrados(archivo):
+    key = load_key()
+    if not key:
+        return []
+    try:
+        fernet = Fernet(key)
+    except Exception as e:
+        messagebox.showerror("Clave de cifrado",
+                             f"Clave inválida/corrupta:\n{e}",
+                             parent=root_machine_app)
+        return []
+    if not os.path.exists(archivo):
+        return []
+
+    registros = []
+    try:
+        with open(archivo, "rb") as f:
+            for raw in f:
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    dec = fernet.decrypt(raw).decode("utf-8")
+                    registros.append(dec)
+                except Exception:
+                    # línea corrupta o clave incorrecta
+                    continue
+    except Exception as e:
+        messagebox.showerror("Error de lectura",
+                             f"No se pudo leer el archivo de registros:\n{e}",
+                             parent=root_machine_app)
+        return []
+    return registros
+
+def check_credentials_from_txt_encrypted(numero_registro_input, password_input):
+    """
+    Formato esperado tras descifrar:
+      fecha,Nombre(…puede tener comas…),Numero,Password,Code_Laser
+    """
+    registros = leer_registros_descifrados(NOMBRE_ARCHIVO_REGISTROS)
+    for line in registros:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(',')
+
+        # localizar el índice del número (entero) porque el nombre puede tener comas
+        num_index = -1
+        for i in range(2, len(parts)):
+            if parts[i].strip().isdigit():
+                num_index = i
+                break
+        if num_index == -1 or num_index + 2 >= len(parts):
+            continue
+
+        nombre = ",".join(parts[1:num_index]).strip()
+        numero = parts[num_index].strip()
+        pwd    = parts[num_index + 1].strip()
+        code   = parts[num_index + 2].strip()
+
+        if numero == numero_registro_input and pwd == password_input:
+            return True, (nombre, code)
+    return False, None
+
+def check_credentials(numero_registro_input, password_input):
+    ok, user = check_credentials_from_mysql(numero_registro_input, password_input)
+    if ok is True:
+        return True, user
+    if ok is None:
+        # MySQL caído -> TXT
+        return check_credentials_from_txt_encrypted(numero_registro_input, password_input)
+    # ok == False -> probar TXT como compatibilidad/offline
+    return check_credentials_from_txt_encrypted(numero_registro_input, password_input)
+
+# ============================== PLC / HEARTBEAT =============================
+def connect_to_plc():
+    global plc_client
+    if plc_client is None:
+        plc_client = snap7.client.Client()
+    try:
+        plc_client.connect(PLC_IP, RACK, SLOT)
+        return plc_client.get_connected()
+    except Exception:
+        return False
+
+def _hb_write(val: int):
+    """Escribe 0x01/0x00 en DBB1 (DBX1.0=bit0)."""
+    try:
+        if plc_client and plc_client.get_connected():
+            data = bytearray(plc_client.db_read(DB_NUMBER, HEARTBEAT_BYTE_OFFSET, 1))
+            if val: 
+                data[0] |= 0x01   # set bit0 -> 1
+            else:
+                data[0] &= 0xFE   # clear bit0 -> 0
+            # escribir de vuelta el mismo byte
+            plc_client.db_write(DB_NUMBER, HEARTBEAT_BYTE_OFFSET, data)
+    except Exception as e:
+        print(f"Heartbeat write error: {e}")
+
+def heartbeat_start_of_cycle():
+    # Requisito: comenzar escribiendo 1
+    _hb_write(1)
+
+def heartbeat_end_of_cycle():
+    # Al terminar el ciclo, dejar en 0
+    time.sleep(HB_PULSE_SECONDS)  # asegura detección del 1
+    _hb_write(0)
+    #print("Se envío 0")
+
+def disconnect_from_plc():
+    global plc_client
+    try:
+        if plc_client and plc_client.get_connected():
+            _hb_write(0)  # garantizar 0 al desconectar
+            plc_client.disconnect()
+    except Exception:
+        pass
+
+# ===================== ACTUALIZACIÓN GUI (desde el hilo) ====================
+def update_gui_plc_status(is_connected, plc_internal_status_byte, product_id_value, product_counter_value, product_height_value,
+                          meas2_value, meas3_value, meas4_value, add_info1_value, add_info2_value, serial_number_value):
+    global plc_status_text_var, plc_connection_indicator_canvas, plc_connection_indicator_oval_id, plc_last_update_label_var, plc_error_label_widget, plc_status_label_widget
+    global product_id_var, product_counter_var, product_read_time_display_var, product_height_var, last_product_time
+    global measurement2_var, measurement3_var, measurement4_var, additional_info1_var, additional_info2_var, serial_number_var
+
+    if not (plc_status_text_var and plc_connection_indicator_canvas and plc_connection_indicator_oval_id and
+            plc_last_update_label_var and plc_error_label_widget and plc_status_label_widget):
+        return
+
+    current_time_display = datetime.now()
+    plc_last_update_label_var.set(current_time_display.strftime("%H:%M:%S"))
+
+    current_plc_status = is_connected and (plc_internal_status_byte == 1)
+
+    global last_plc_connection_status, plc_disconnection_time
+    if not current_plc_status and last_plc_connection_status:
+        plc_disconnection_time = datetime.now()
+    elif current_plc_status and not last_plc_connection_status:
+        plc_disconnection_time = None
+    last_plc_connection_status = current_plc_status
+
+    if current_plc_status:
+        status_text = "PLC STATUS: CONECTADO!"
+        light_color = COLOR_PLC_CONNECTED
+        text_color = COLOR_SUCCESS_GREEN
+        if plc_error_label_widget.winfo_ismapped():
+            plc_error_label_widget.grid_remove()
+    else:
+        status_text = "PLC STATUS: DESCONECTADO"
+        light_color = COLOR_DANGER_RED
+        text_color = COLOR_DANGER_RED
+        plc_error_label_widget.config(text="ADVERTENCIA: NO HAY CONEXIÓN CON EL PLC", fg=COLOR_PLC_WARNING)
+        if not plc_error_label_widget.winfo_ismapped():
+            plc_error_label_widget.grid()
+
+    plc_status_text_var.set(status_text)
+    plc_status_label_widget.config(fg=text_color)
+    plc_connection_indicator_canvas.itemconfig(plc_connection_indicator_oval_id, fill=light_color, outline=light_color)
+
+    if (product_id_var is not None and product_counter_var is not None and
+        product_read_time_display_var is not None and product_height_var is not None and
+        serial_number_var is not None):
+
+        product_id_var.set(f"Producto: {product_id_value}")
+        product_counter_var.set(f"Contador de productos: {product_counter_value}")
+        product_height_var.set(f"Altura: {product_height_value:.2f} mm" if isinstance(product_height_value, (int, float)) else "Altura: N/A")
+        serial_number_var.set(f"Número Serial: {serial_number_value}")
+
+        if last_product_time:
+            time_elapsed = current_time_display - last_product_time
+            minutes, seconds = divmod(int(time_elapsed.total_seconds()), 60)
+            product_read_time_display_var.set(f"Tiempo: {minutes:02}:{seconds:02}")
+        else:
+            product_read_time_display_var.set("Tiempo: 00:00")
+
+    if (measurement2_var is not None and measurement3_var is not None and
+        measurement4_var is not None and additional_info1_var is not None and
+        additional_info2_var is not None):
+
+        measurement2_var.set(f" {meas2_value:.2f} mm" if isinstance(meas2_value, (int, float)) else f"Measurement 2: {meas2_value}")
+        measurement3_var.set(f" {meas3_value:.2f} mm" if isinstance(meas3_value, (int, float)) else f"Measurement 3: {meas3_value}")
+        measurement4_var.set(f" {meas4_value:.2f} mm" if isinstance(meas4_value, (int, float)) else f"Measurement 4: {meas4_value}")
+        additional_info1_var.set(f" {add_info1_value}")
+        additional_info2_var.set(f" {add_info2_value}")
+
+# ======================== HILO DE MONITOREO DEL PLC =========================
+def plc_monitoring_loop_logic():
+    global plc_client, last_read_product_counter, last_product_time
+
+    plc_is_connected = False
+    plc_connected_byte_value = -1
+    product_id_value = "N/A"
+    product_counter_value = "N/A"
+    product_height_value = "N/A"
+    meas2_value = "N/A"
+    meas3_value = "N/A"
+    meas4_value = "N/A"
+    add_info1_value = "N/A"
+    add_info2_value = "N/A"
+    serial_number_value = "N/A"
+
+    if not plc_client or not plc_client.get_connected():
+        plc_is_connected = connect_to_plc()
+    else:
+        plc_is_connected = True
+
+    if plc_is_connected:
+        try:
+            # --- INICIO DEL CICLO: escribe 1 ---
+            heartbeat_start_of_cycle()
+
+            data = plc_client.db_read(DB_NUMBER, 0, 300)
+
+            plc_connected_byte_value = snap7.util.get_byte(data, 4)
+            product_id_value         = snap7.util.get_string(data, 6).strip('\x00')
+            product_height_value     = snap7.util.get_real(data, 126)
+            meas2_value              = snap7.util.get_real(data, 130)
+            meas3_value              = snap7.util.get_real(data, 134)
+            meas4_value              = snap7.util.get_real(data, 138)
+            current_product_counter  = snap7.util.get_dint(data, 142)
+            serial_number_value      = snap7.util.get_string(data, 150).strip('\x00')
+            add_info1_value          = snap7.util.get_string(data, 218).strip('\x00')
+            add_info2_value          = snap7.util.get_string(data, 252).strip('\x00')
+
+            # Log de producto cuando cambia el contador
+            if last_read_product_counter is None or current_product_counter != last_read_product_counter:
+                last_product_time = datetime.now()
+                last_read_product_counter = current_product_counter
+
+                try:
+                    current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    file_exists = os.path.exists(PRODUCT_LOG_FILE_PATH)
+                    os.makedirs(os.path.dirname(PRODUCT_LOG_FILE_PATH), exist_ok=True)
+                    with open(PRODUCT_LOG_FILE_PATH, "a", newline='', encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        if not file_exists:
+                            writer.writerow(["Fecha", "ID_Producto", "Altura_mm", "Serial_Number"])
+                        writer.writerow([current_timestamp, product_id_value, f"{product_height_value:.2f}", serial_number_value])
+                except Exception as e:
+                    write_log("ERROR", f"Error al escribir Product_Log.csv: {e}")
+
+            product_counter_value = current_product_counter
+
+            # --- FIN DEL CICLO: dejar 0 ---
+            heartbeat_end_of_cycle()
+
+            # DEBUG opcional
+            # print(f"DEBUG: HB ciclo 1->0, PLC_Byte4={plc_connected_byte_value}, Serial='{serial_number_value}'")
+
+        except Exception as e:
+            print(f"DEBUG HILO: Error PLC (DB{DB_NUMBER}): {e}")
+            # asegurar 0 ante error
+            try: heartbeat_end_of_cycle()
+            except: pass
+            plc_connected_byte_value = -1
+            product_id_value = "ERROR"
+            product_counter_value = "ERROR"
+            product_height_value = "ERROR"
+            meas2_value = "ERROR"
+            meas3_value = "ERROR"
+            meas4_value = "ERROR"
+            add_info1_value = "ERROR"
+            add_info2_value = "ERROR"
+            serial_number_value = "ERROR"
+            plc_is_connected = False
+            disconnect_from_plc()
+
+    return (plc_is_connected, plc_connected_byte_value, product_id_value, product_counter_value, product_height_value,
+            meas2_value, meas3_value, meas4_value, add_info1_value, add_info2_value, serial_number_value)
+
+def plc_monitoring_thread_runner():
+    while not stop_monitoring_event.is_set():
+        values = plc_monitoring_loop_logic()
+        (plc_is_connected, plc_internal_status_byte_from_plc, product_id_value, product_counter_value, product_height_value,
+         meas2_value, meas3_value, meas4_value, add_info1_value, add_info2_value, serial_number_value) = values
+
+        if root_machine_app and root_machine_app.winfo_exists():
+            try:
+                root_machine_app.after(0, lambda: update_gui_plc_status(
+                    plc_is_connected, plc_internal_status_byte_from_plc, product_id_value, product_counter_value, product_height_value,
+                    meas2_value, meas3_value, meas4_value, add_info1_value, add_info2_value, serial_number_value
+                ))
+            except tk.TclError:
+                break
+            except Exception:
+                break
+        else:
+            break
+
+        time.sleep(READ_INTERVAL_SECONDS)
+    disconnect_from_plc()
+
+def start_monitoring_thread():
+    global monitoring_thread, stop_monitoring_event
+    stop_monitoring_event.clear()
+    monitoring_thread = threading.Thread(target=plc_monitoring_thread_runner, daemon=True)
+    monitoring_thread.start()
+
+def stop_monitoring_thread():
+    global stop_monitoring_event, monitoring_thread
+    if monitoring_thread and monitoring_thread.is_alive():
+        stop_monitoring_event.set()
+        monitoring_thread.join(timeout=5)
+
+# ============================= AUTENTICACIÓN GUI ============================
+def attempt_machine_login(parent_root, registro_var, password_var, entry_registro_login):
+    global login_successful_machine, logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global
+    numero_registro = registro_var.get().strip()
+    password = password_var.get().strip()
+
+    if not numero_registro or not password:
+        messagebox.showwarning("Campos Vacíos", "Por favor ingresa tu número de registro y contraseña.", parent=parent_root)
+        return
+
+    success, user_data = check_credentials(numero_registro, password)
+    if success:
+        login_successful_machine = True
+        logged_in_user_name_global  = user_data[0]
+        logged_in_laser_code_global = user_data[1]
+        logged_in_datetime_global   = datetime.now()
+        write_log("LOGIN", f"'{logged_in_user_name_global}' ({logged_in_laser_code_global}) ha iniciado sesión.")
+
+        try:
+            os.makedirs(os.path.dirname(LASER_CODE_FILE_PATH), exist_ok=True)
+            with open(LASER_CODE_FILE_PATH, "w", newline='', encoding="utf-8") as f:
+                writer = csv.writer(f)
+                #writer.writerow(["Laser_Code"])
+                writer.writerow([logged_in_laser_code_global])
+        except Exception as e:
+            messagebox.showerror("Error de Archivo", f"No se pudo crear el archivo de código láser:\n{e}", parent=parent_root)
+            write_log("ERROR", f"Error al crear archivo de código láser: {e}")
+
+        show_logged_in_screen(parent_root, logged_in_user_name_global, logged_in_laser_code_global)
+    else:
+        messagebox.showerror("Error de Acceso", "Número de registro o contraseña incorrectos.", parent=parent_root)
+        registro_var.set(""); password_var.set(""); entry_registro_login.focus_set()
+
+# ================================ MENÚS / UI ================================
+def show_logs_window():
+    log_window = tk.Toplevel(root_machine_app)
+    log_window.title("Historial de Registros")
+    log_window.geometry("850x400")
+    log_window.configure(bg=COLOR_BACKGROUND_PRIMARY)
+
+    log_window.update_idletasks()
+    x = root_machine_app.winfo_x() + (root_machine_app.winfo_width() // 2) - (log_window.winfo_width() // 2)
+    y = root_machine_app.winfo_y() + (root_machine_app.winfo_height() // 2) - (log_window.winfo_height() // 2)
+    log_window.geometry(f"+{x}+{y}")
+
+    text_area = scrolledtext.ScrolledText(log_window, wrap=tk.WORD, bg=COLOR_BACKGROUND_TERTIARY, fg=COLOR_TEXT_LIGHT,
+                                          font=FONT_LABEL, bd=0, relief="flat", padx=10, pady=10)
+    text_area.pack(expand=True, fill="both", padx=10, pady=10)
+
+    for line in read_logs():
+        text_area.insert(tk.END, line + "\n")
+    text_area.config(state=tk.DISABLED)
+    text_area.see(tk.END)
+
+def show_system_info():
+    info = f"Conexión PLC:\n  IP: {PLC_IP}\n  DB de Lectura: DB{DB_NUMBER}\n  Rack: {RACK}\n  Slot: {SLOT}"
+    messagebox.showinfo("Información del Sistema", info, parent=root_machine_app)
+
+def show_network_info():
+    global last_plc_connection_status, plc_disconnection_time
+    if last_plc_connection_status:
+        status_message = "El PLC está CONECTADO actualmente."
+    else:
+        if plc_disconnection_time:
+            dt = datetime.now() - plc_disconnection_time
+            minutes, seconds = divmod(int(dt.total_seconds()), 60)
+            hours, minutes = divmod(minutes, 60)
+            status_message = (f"El PLC está DESCONECTADO.\n"
+                              f"Tiempo desde la última desconexión: {hours:02}h {minutes:02}m {seconds:02}s")
+        else:
+            status_message = "El PLC está DESCONECTADO (no se ha registrado una conexión previa para calcular el tiempo)."
+    messagebox.showinfo("Estado de Conexión de Red", status_message, parent=root_machine_app)
+
+def save_current_data_to_file():
+    global root_machine_app, plc_status_text_var, plc_last_update_label_var, product_id_var, product_counter_var, product_height_var, product_read_time_display_var, plc_disconnection_time
+    global logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global
+    global measurement2_var, measurement3_var, measurement4_var, additional_info1_var, additional_info2_var, serial_number_var
+
+    if not login_successful_machine:
+        messagebox.showwarning("Acceso Denegado", "Debes iniciar sesión para descargar datos.", parent=root_machine_app)
+        return
+
+    now = datetime.now()
+    formatted_download_time = now.strftime('%Y-%m-%d %H:%M:%S')
+
+    user_name = logged_in_user_name_global or 'N/A'
+    laser_code = logged_in_laser_code_global or 'N/A'
+    login_datetime = logged_in_datetime_global.strftime('%Y-%m-%d %H:%M:%S') if logged_in_datetime_global else 'N/A'
+
+    plc_status = plc_status_text_var.get() if plc_status_text_var else 'N/A'
+    plc_last_update = plc_last_update_label_var.get() if plc_last_update_label_var else 'N/A'
+
+    time_since_disconnection_str = "N/A"
+    if not last_plc_connection_status and plc_disconnection_time:
+        delta = now - plc_disconnection_time
+        minutes, seconds = divmod(int(delta.total_seconds()), 60)
+        hours, minutes = divmod(minutes, 60)
+        time_since_disconnection_str = f"{hours:02}h {minutes:02}m {seconds:02}s"
+
+    product_id = product_id_var.get().replace("Producto: ", "") if product_id_var else 'N/A'
+    product_counter = product_counter_var.get().replace("Contador de productos: ", "") if product_counter_var else 'N/A'
+    product_height = product_height_var.get().replace("Altura: ", "").replace(" mm", "") if product_height_var else 'N/A'
+    product_read_time = product_read_time_display_var.get().replace("Tiempo: ", "") if product_read_time_display_var else 'N/A'
+    serial_number = (serial_number_var.get()
+                     .replace("Número Serial: ", "")
+                     .replace("Número Serial : ", "")
+                     .replace("Serial Number: ", "")) if serial_number_var else 'N/A'
+
+    meas2 = measurement2_var.get().replace("Medición 2: ", "").replace(" mm", "") if measurement2_var else 'N/A'
+    meas3 = measurement3_var.get().replace("Medición 3: ", "").replace(" mm", "") if measurement3_var else 'N/A'
+    meas4 = measurement4_var.get().replace("Medición 4: ", "").replace(" mm", "") if measurement4_var else 'N/A'
+    add_info1 = additional_info1_var.get().replace("Información Adicional 1: ", "") if additional_info1_var else 'N/A'
+    add_info2 = additional_info2_var.get().replace("Información Adicional 2: ", "") if additional_info2_var else 'N/A'
+
+    file_path = filedialog.asksaveasfilename(
+        parent=root_machine_app,
+        defaultextension=".txt",
+        filetypes=[("Archivos de Texto", "*.txt"), ("Archivos CSV", "*.csv"), ("Todos los Archivos", "*.*")],
+        title="Guardar Datos Actuales"
+    )
+    if not file_path:
+        return
+
+    try:
+        if file_path.lower().endswith('.csv'):
+            headers = [
+                "Download_Timestamp", "User_Name", "Laser_Code", "Login_Timestamp",
+                "PLC_Status", "PLC_Last_Update", "PLC_Disconnection_Time_Elapsed",
+                "Product_ID", "Product_Counter", "Product_Height_mm", "Time_Since_Last_Product", "Serial_Number",
+                "Measurement_2_mm", "Measurement_3_mm", "Measurement_4_mm", "Additional_Info_1", "Additional_Info_2"
+            ]
+            data_row = [
+                formatted_download_time, user_name, laser_code, login_datetime,
+                plc_status, plc_last_update, time_since_disconnection_str,
+                product_id, product_counter, product_height, product_read_time, serial_number,
+                meas2, meas3, meas4, add_info1, add_info2
+            ]
+            with open(file_path, "w", newline='', encoding="utf-8") as file:
+                writer = csv.writer(file)
+                writer.writerow(headers)
+                writer.writerow(data_row)
+        else:
+            data_to_save = []
+            data_to_save.append(f"--- Datos del Panel General de Control ---")
+            data_to_save.append(f"Fecha y Hora de Descarga: {formatted_download_time}")
+            data_to_save.append(f"---------------------------------------------")
+            if logged_in_user_name_global and logged_in_laser_code_global and logged_in_datetime_global:
+                data_to_save.append(f"Detalles de la Sesión:")
+                data_to_save.append(f"  Usuario: {user_name}")
+                data_to_save.append(f"  Código Láser: {laser_code}")
+                data_to_save.append(f"  Fecha y Hora de Acceso: {login_datetime}")
+                data_to_save.append(f"---------------------------------------------")
+            data_to_save.append(f"Estado del PLC: {plc_status}")
+            data_to_save.append(f"Última Actualización del PLC: {plc_last_update}")
+            data_to_save.append(f"Tiempo desde Desconexión PLC: {time_since_disconnection_str}")
+            data_to_save.append(f"---------------------------------------------")
+            data_to_save.append(f"Datos del Producto:")
+            data_to_save.append(f"  Producto: {product_id}")
+            data_to_save.append(f"  Contador de productos: {product_counter}")
+            data_to_save.append(f"  Altura: {product_height} mm")
+            data_to_save.append(f"  Tiempo desde último producto: {product_read_time}")
+            data_to_save.append(f"  Serial Number: {serial_number}")
+            data_to_save.append(f"---------------------------------------------")
+            data_to_save.append(f"Otros Datos de Medición y Adicionales (Pestaña Lectura PLC):")
+            data_to_save.append(f"  Measurement 2: {meas2} mm")
+            data_to_save.append(f"  Measurement 3: {meas3} mm")
+            data_to_save.append(f"  Measurement 4: {meas4} mm")
+            data_to_save.append(f"  Additional Info 1: {add_info1}")
+            data_to_save.append(f"  Additional Info 2: {add_info2}")
+            data_to_save.append(f"---------------------------------------------")
+            with open(file_path, "w", encoding="utf-8") as file:
+                for line in data_to_save:
+                    file.write(line + "\n")
+
+        messagebox.showinfo("Guardado Exitoso", f"Los datos se han guardado en:\n{file_path}", parent=root_machine_app)
+        write_log("SAVE_DATA", f"Datos actuales guardados en: {file_path}")
+    except Exception as e:
+        messagebox.showerror("Error al Guardar", f"No se pudo guardar el archivo:\n{e}", parent=root_machine_app)
+        write_log("ERROR", f"Error al guardar datos: {e}")
+
+def show_about():
+    messagebox.showinfo("Acerca de", "PROGRAM DESIGNED FOR VSCT MEXICO", parent=root_machine_app)
+
+def show_user_manual():
+    manual_text = (
+        "MANUAL DE USUARIO\n\n"
+        "• Login: primero MySQL. Si MySQL falla o no encuentra al usuario, usa TXT cifrado (respaldo).\n"
+        "• Monitoreo PLC: lectura cíclica y heartbeat 1→0 por ciclo (DBX1.0).\n"
+        "• Guardado: snapshot a TXT/CSV; log por producto en CSV cuando cambia el contador.\n"
+        "• Logs: ventana con historial.\n"
+    )
+    messagebox.showinfo("Manual de Usuario", manual_text, parent=root_machine_app)
+
+def create_menu_bar(parent_root, enable_download_menu=False, enable_logs_menu=False):
+    global download_menu_instance, logs_menu_instance
+
+    menubar = tk.Menu(parent_root, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY,
+                      activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
+    parent_root.config(menu=menubar)
+
+    system_menu = tk.Menu(menubar, tearoff=0, bg=COLOR_SUBMENU_BACKGROUND, fg=COLOR_SUBMENU_FOREGROUND,
+                          activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
+    menubar.add_cascade(label="Sistema", menu=system_menu)
+    system_menu.add_command(label="Información...", command=show_system_info)
+    system_menu.add_separator()
+    system_menu.add_command(label="Salir", command=on_main_window_close)
+
+    network_menu = tk.Menu(menubar, tearoff=0, bg=COLOR_SUBMENU_BACKGROUND, fg=COLOR_SUBMENU_FOREGROUND,
+                           activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
+    menubar.add_cascade(label="Red", menu=network_menu)
+    network_menu.add_command(label="Estado de Conexión...", command=show_network_info)
+    network_menu.add_separator()
+    download_menu = tk.Menu(network_menu, tearoff=0, bg=COLOR_SUBMENU_BACKGROUND, fg=COLOR_SUBMENU_FOREGROUND,
+                            activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
+    download_menu_instance = download_menu
+    network_menu.add_cascade(label="Descargar a PC...", menu=download_menu)
+    download_menu.add_command(label="Guardar Datos Actuales", command=save_current_data_to_file)
+    download_menu_instance.entryconfig("Guardar Datos Actuales", state="normal" if enable_download_menu else "disabled")
+
+    logs_menu = tk.Menu(menubar, tearoff=0, bg=COLOR_SUBMENU_BACKGROUND, fg=COLOR_SUBMENU_FOREGROUND,
+                        activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
+    menubar.add_cascade(label="Logs", menu=logs_menu)
+    logs_menu.add_command(label="Ver Historial de Registros", command=show_logs_window)
+    logs_menu_instance = logs_menu
+    logs_menu_instance.entryconfig("Ver Historial de Registros", state="normal" if enable_logs_menu else "disabled")
+
+    help_menu = tk.Menu(menubar, tearoff=0, bg=COLOR_SUBMENU_BACKGROUND, fg=COLOR_SUBMENU_FOREGROUND,
+                        activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
+    menubar.add_cascade(label="Ayuda", menu=help_menu)
+    help_menu.add_command(label="Acerca de...", command=show_about)
+    help_menu.add_separator()
+    help_menu.add_command(label="Manual de Usuario", command=show_user_manual)
+
+# =============================== PANTALLAS GUI ==============================
+def show_logged_in_screen(parent_root, user_name, laser_code):
+    global root_machine_app
+    global plc_status_text_var, plc_connection_indicator_canvas, plc_connection_indicator_oval_id, plc_last_update_label_var, plc_error_label_widget, plc_status_label_widget
+    global product_id_var, product_counter_var, product_read_time_display_var, product_height_var
+    global measurement2_var, measurement3_var, measurement4_var, additional_info1_var, additional_info2_var, serial_number_var
+
+    root_machine_app = parent_root
+    root_machine_app.deiconify()
+    root_machine_app.title("MANUAL LASERCELL")
+    root_machine_app.geometry("640x850")
+    root_machine_app.configure(bg=COLOR_BACKGROUND_PRIMARY)
+
+    for w in root_machine_app.winfo_children():
+        w.destroy()
+
+    create_menu_bar(root_machine_app, enable_download_menu=True, enable_logs_menu=True)
+
+    root_machine_app.update_idletasks()
+    x = root_machine_app.winfo_screenwidth() // 2 - root_machine_app.winfo_width() // 2
+    y = root_machine_app.winfo_screenheight() // 2 - root_machine_app.winfo_height() // 2
+    root_machine_app.geometry(f"+{x}+{y}")
+
+    # --- Scrollable main_content_frame ---
+    main_canvas = tk.Canvas(root_machine_app, bg=COLOR_BACKGROUND_PRIMARY, highlightthickness=0)
+    main_canvas.pack(side="left", fill="both", expand=True)
+    x_scroll = tk.Scrollbar(root_machine_app, orient="horizontal", command=main_canvas.xview)
+    x_scroll.pack(side="bottom", fill="x")
+    y_scroll = tk.Scrollbar(root_machine_app, orient="vertical", command=main_canvas.yview)
+    y_scroll.pack(side="right", fill="y")
+    main_canvas.configure(xscrollcommand=x_scroll.set, yscrollcommand=y_scroll.set)
+    main_content_frame = tk.Frame(main_canvas, bg=COLOR_BACKGROUND_PRIMARY, padx=30, pady=30)
+    main_content_frame_id = main_canvas.create_window((0,0), window=main_content_frame, anchor="nw")
+    def on_configure(event):
+        main_canvas.configure(scrollregion=main_canvas.bbox("all"))
+    main_content_frame.bind("<Configure>", on_configure)
+    def on_canvas_configure(event):
+        main_canvas.itemconfig(main_content_frame_id, width=event.width)
+    main_canvas.bind("<Configure>", on_canvas_configure)
+
+    # --- ESTADO DEL PLC ---
+    plc_status_frame = tk.LabelFrame(main_content_frame, text="ESTADO DEL PLC", font=FONT_SECTION_HEADER,
+                                     bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE, bd=1, relief="solid",
+                                     highlightbackground=COLOR_BORDER_SUBTLE, highlightthickness=1, padx=30, pady=25)
+    plc_status_frame.pack(pady=(0, 25), fill="x")
+    plc_status_frame.grid_columnconfigure(0, weight=1)
+    plc_status_frame.grid_columnconfigure(1, weight=3)
+
+    global plc_connection_indicator_oval_id, plc_connection_indicator_canvas
+    plc_connection_indicator_canvas = tk.Canvas(plc_status_frame, width=40, height=40, bg=COLOR_BACKGROUND_SECONDARY, highlightthickness=0)
+    plc_connection_indicator_canvas.grid(row=0, column=0, sticky="w", padx=5, pady=2)
+    plc_connection_indicator_oval_id = plc_connection_indicator_canvas.create_oval(5, 5, 35, 35, fill=COLOR_PLC_DISCONNECTED, outline=COLOR_PLC_DISCONNECTED)
+
+    global plc_status_text_var, plc_status_label_widget, plc_last_update_label_var, plc_error_label_widget
+    plc_status_text_var = tk.StringVar(value="Conectando al PLC...")
+    plc_status_label_widget = tk.Label(plc_status_frame, textvariable=plc_status_text_var, font=FONT_STATUS_INFO, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY)
+    plc_status_label_widget.grid(row=0, column=1, sticky="w", pady=2, padx=5)
+
+    tk.Label(plc_status_frame, text="Última Actualización:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
+    plc_last_update_label_var = tk.StringVar(value=datetime.now().strftime("%H:%M:%S"))
+    tk.Label(plc_status_frame, textvariable=plc_last_update_label_var, font=FONT_STATUS_INFO, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=1, column=1, sticky="w", pady=2, padx=5)
+
+    plc_error_label_widget = tk.Label(plc_status_frame, text="", font=FONT_STATUS_ERROR, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_DANGER_RED)
+    plc_error_label_widget.grid(row=2, column=0, columnspan=2, pady=(10,5), padx=5, sticky="w")
+    plc_error_label_widget.grid_remove()
+
+    # --- DETALLES DE SESIÓN ---
+    user_info_frame = tk.LabelFrame(main_content_frame, text="DETALLES DE SESIÓN", font=FONT_SECTION_HEADER, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE, bd=1, relief="solid",
+                                    highlightbackground=COLOR_BORDER_SUBTLE, highlightthickness=1, padx=20, pady=15)
+    user_info_frame.pack(pady=(0, 25), fill="x")
+    user_info_frame.grid_columnconfigure(0, weight=1)
+    user_info_frame.grid_columnconfigure(1, weight=3)
+
+    tk.Label(user_info_frame, text="Usuario:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(user_info_frame, text=user_name, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=0, column=1, sticky="w", pady=2, padx=5)
+
+    tk.Label(user_info_frame, text="Fecha y Hora de Acceso:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(user_info_frame, text=logged_in_datetime_global.strftime("%Y-%m-%d %H:%M:%S"), font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=1, column=1, sticky="w", pady=2, padx=5)
+
+    tk.Label(user_info_frame, text="Código Láser:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(user_info_frame, text=laser_code, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=2, column=1, sticky="w", pady=2, padx=5)
+
+    # --- TABS ---
+    notebook = ttk.Notebook(main_content_frame)
+    notebook.pack(pady=(0, 25), fill="both", expand=True)
+
+    style = ttk.Style()
+    style.theme_use('classic')
+    style.configure("TNotebook", background=COLOR_BACKGROUND_PRIMARY, borderwidth=0)
+    style.configure("TNotebook.Tab", background=COLOR_BACKGROUND_SECONDARY, foreground=COLOR_TEXT_PRIMARY,
+                    font=FONT_SECTION_HEADER, padding=[10, 5])
+    style.map("TNotebook.Tab", background=[("selected", COLOR_BACKGROUND_TERTIARY)],
+              foreground=[("selected", COLOR_TEXT_PRIMARY)])
+
+    tab_overview = tk.LabelFrame(notebook, text="", font=FONT_SECTION_HEADER,
+                                 bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE, bd=1, relief="solid",
+                                 highlightbackground=COLOR_BORDER_SUBTLE, highlightthickness=1, padx=20, pady=15)
+    notebook.add(tab_overview, text="GENERAL")
+    tab_overview.grid_columnconfigure(0, weight=1)
+    tab_overview.grid_columnconfigure(1, weight=3)
+
+    global product_id_var, product_read_time_display_var, product_counter_var, product_height_var, serial_number_var
+    product_id_var = tk.StringVar(value="Producto: N/A")
+    product_read_time_display_var = tk.StringVar(value="Tiempo: 00:00")
+    product_counter_var = tk.StringVar(value="Contador de productos: 0")
+    product_height_var = tk.StringVar(value="Altura: N/A")
+    serial_number_var = tk.StringVar(value="Número Serial: N/A")
+
+    tk.Label(tab_overview, text="Producto:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, textvariable=product_id_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=0, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Tiempo:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, textvariable=product_read_time_display_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=1, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Contador de Productos:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, textvariable=product_counter_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=2, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Altura:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=3, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, textvariable=product_height_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=3, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Número Serial:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=4, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, textvariable=serial_number_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=4, column=1, sticky="w", pady=2, padx=5)
+
+    tab_plc_readings = tk.LabelFrame(notebook, text="", font=FONT_SECTION_HEADER,
+                                     bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE, bd=1, relief="solid",
+                                     highlightbackground=COLOR_BORDER_SUBTLE, highlightthickness=1, padx=20, pady=15)
+    notebook.add(tab_plc_readings, text="INFO ADICIONAL")
+    tab_plc_readings.grid_columnconfigure(0, weight=1)
+    tab_plc_readings.grid_columnconfigure(1, weight=3)
+
+    global measurement2_var, measurement3_var, measurement4_var, additional_info1_var, additional_info2_var
+    measurement2_var = tk.StringVar(value="Medición 2: N/A")
+    measurement3_var = tk.StringVar(value="Medición 3: N/A")
+    measurement4_var = tk.StringVar(value="Medición 4: N/A")
+    additional_info1_var = tk.StringVar(value="Información Adicional 1: N/A")
+    additional_info2_var = tk.StringVar(value="Información Adicional 2: N/A")
+
+    tk.Label(tab_plc_readings, text="Medición 2:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_plc_readings, textvariable=measurement2_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=0, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_plc_readings, text="Medición 3:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_plc_readings, textvariable=measurement3_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=1, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_plc_readings, text="Medición 4:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_plc_readings, textvariable=measurement4_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=2, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_plc_readings, text="Información Adicional 1:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=3, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_plc_readings, textvariable=additional_info1_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=3, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_plc_readings, text="Información Adicional 2:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=4, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_plc_readings, textvariable=additional_info2_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=4, column=1, sticky="w", pady=2, padx=5)
+
+    # --- Botones Sesión ---
+    session_buttons_frame = tk.Frame(main_content_frame, bg=COLOR_BACKGROUND_PRIMARY)
+    session_buttons_frame.pack(pady=(10, 20), fill="x", expand=True)
+    session_buttons_frame.grid_columnconfigure(0, weight=1)
+    session_buttons_frame.grid_columnconfigure(1, weight=1)
+
+    btn_logout = tk.Button(session_buttons_frame, text="Registrar Salida", command=lambda: logout(parent_root),
+                           bg=COLOR_ACCENT_BLUE, fg=COLOR_BACKGROUND_PRIMARY, font=FONT_BUTTON, width=18, height=2, cursor="hand2", bd=0, relief="flat",
+                           activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
+    btn_logout.grid(row=0, column=0, padx=10, pady=5, sticky="e")
+
+    btn_exit = tk.Button(session_buttons_frame, text="Salir de la Aplicación", command=on_main_window_close,
+                         bg=COLOR_DANGER_RED, fg=COLOR_TEXT_LIGHT, font=FONT_BUTTON, width=18, height=2, cursor="hand2", bd=0, relief="flat",
+                         activebackground=COLOR_DANGER_RED, activeforeground=COLOR_TEXT_LIGHT)
+    btn_exit.grid(row=0, column=1, padx=10, pady=5, sticky="w")
+
+def logout(parent_root):
+    global login_successful_machine, logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global
+    global product_id_var, product_counter_var, product_read_time_display_var, product_height_var
+    global measurement2_var, measurement3_var, measurement4_var, additional_info1_var, additional_info2_var, serial_number_var
+
+    if os.path.exists(LASER_CODE_FILE_PATH):
+        try: os.remove(LASER_CODE_FILE_PATH)
+        except Exception as e:
+            messagebox.showerror("Error de Archivo", f"No se pudo eliminar el archivo de código láser:\n{e}", parent=parent_root)
+            write_log("ERROR", f"Error al eliminar archivo de código láser: {e}")
+
+    if logged_in_user_name_global:
+        write_log("LOGOUT", f"Usuario '{logged_in_user_name_global}' ({logged_in_laser_code_global}) ha cerrado sesión.")
+
+    login_successful_machine = False
+    logged_in_user_name_global = None
+    logged_in_laser_code_global = None
+    logged_in_datetime_global = None
+
+    product_id_var = None
+    product_counter_var = None
+    product_read_time_display_var = None
+    product_height_var = None
+    measurement2_var = None
+    measurement3_var = None
+    measurement4_var = None
+    additional_info1_var = None
+    additional_info2_var = None
+    serial_number_var = None
+
+    show_initial_screen(parent_root)
+
+def show_initial_screen(parent_root):
+    global login_successful_machine
+    global plc_status_text_var, plc_connection_indicator_canvas, plc_connection_indicator_oval_id, plc_last_update_label_var, plc_error_label_widget, plc_status_label_widget
+    global product_id_var, product_counter_var, product_read_time_display_var, product_height_var, serial_number_var
+
+    login_successful_machine = False
+
+    for w in parent_root.winfo_children():
+        w.destroy()
+
+    parent_root.title("Manual Lasercell")
+    parent_root.geometry("640x820")
+    parent_root.resizable(True, True)
+    parent_root.configure(bg=COLOR_BACKGROUND_PRIMARY)
+
+    create_menu_bar(parent_root, enable_download_menu=False, enable_logs_menu=False)
+
+    parent_root.update_idletasks()
+    x = parent_root.winfo_screenwidth() // 2 - parent_root.winfo_width() // 2
+    y = parent_root.winfo_screenheight() // 2 - parent_root.winfo_height() // 2
+    parent_root.geometry(f"+{x}+{y}")
+
+    # --- Scrollable main_content_frame ---
+    main_canvas = tk.Canvas(parent_root, bg=COLOR_BACKGROUND_PRIMARY, highlightthickness=0)
+    main_canvas.pack(side="left", fill="both", expand=True)
+    x_scroll = tk.Scrollbar(parent_root, orient="horizontal", command=main_canvas.xview)
+    x_scroll.pack(side="bottom", fill="x")
+    y_scroll = tk.Scrollbar(parent_root, orient="vertical", command=main_canvas.yview)
+    y_scroll.pack(side="right", fill="y")
+    main_canvas.configure(xscrollcommand=x_scroll.set, yscrollcommand=y_scroll.set)
+    main_content_frame = tk.Frame(main_canvas, bg=COLOR_BACKGROUND_PRIMARY, padx=30, pady=30)
+    main_content_frame_id = main_canvas.create_window((0,0), window=main_content_frame, anchor="nw")
+    def on_configure(event):
+        main_canvas.configure(scrollregion=main_canvas.bbox("all"))
+    main_content_frame.bind("<Configure>", on_configure)
+    def on_canvas_configure(event):
+        main_canvas.itemconfig(main_content_frame_id, width=event.width)
+    main_canvas.bind("<Configure>", on_canvas_configure)
+
+    # --- ESTADO DEL PLC ---
+    plc_status_frame = tk.LabelFrame(main_content_frame, text="ESTADO DEL PLC", font=FONT_SECTION_HEADER, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE,
+                                     bd=1, relief="solid", highlightbackground=COLOR_BORDER_SUBTLE, highlightthickness=1, padx=30, pady=25)
+    plc_status_frame.pack(pady=(0, 25), fill="x")
+    plc_status_frame.grid_columnconfigure(0, weight=1)
+    plc_status_frame.grid_columnconfigure(1, weight=3)
+
+    global plc_connection_indicator_oval_id, plc_connection_indicator_canvas
+    plc_connection_indicator_canvas = tk.Canvas(plc_status_frame, width=40, height=40, bg=COLOR_BACKGROUND_SECONDARY, highlightthickness=0)
+    plc_connection_indicator_canvas.grid(row=0, column=0, sticky="w", padx=5, pady=2)
+    plc_connection_indicator_oval_id = plc_connection_indicator_canvas.create_oval(5, 5, 35, 35, fill=COLOR_PLC_DISCONNECTED, outline=COLOR_PLC_DISCONNECTED)
+
+    global plc_status_text_var, plc_status_label_widget, plc_last_update_label_var, plc_error_label_widget
+    plc_status_text_var = tk.StringVar(value="Conectando con PLC...")
+    plc_status_label_widget = tk.Label(plc_status_frame, textvariable=plc_status_text_var, font=FONT_STATUS_INFO, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY)
+    plc_status_label_widget.grid(row=0, column=1, sticky="w", pady=2, padx=5)
+
+    tk.Label(plc_status_frame, text="Última Actualización:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
+    plc_last_update_label_var = tk.StringVar(value=datetime.now().strftime("%H:%M:%S"))
+    tk.Label(plc_status_frame, textvariable=plc_last_update_label_var, font=FONT_STATUS_INFO, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=1, column=1, sticky="w", pady=2, padx=5)
+
+    plc_error_label_widget = tk.Label(plc_status_frame, text="", font=FONT_STATUS_ERROR, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_DANGER_RED)
+    plc_error_label_widget.grid(row=2, column=0, columnspan=2, pady=(10,5), padx=5, sticky="w")
+    plc_error_label_widget.grid_remove()
+
+    # --- ÚLTIMO PRODUCTO ---
+    product_data_frame = tk.LabelFrame(main_content_frame, text="ÚLTIMO PRODUCTO MARCADO", font=FONT_SECTION_HEADER,
+                                       bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE, bd=1, relief="solid",
+                                       highlightbackground=COLOR_BORDER_SUBTLE, highlightthickness=1, padx=20, pady=15)
+    product_data_frame.pack(pady=(0, 25), fill="x")
+    product_data_frame.grid_columnconfigure(0, weight=1)
+    product_data_frame.grid_columnconfigure(1, weight=3)
+
+    product_id_var = tk.StringVar(value="Producto: N/A")
+    product_read_time_display_var = tk.StringVar(value="Tiempo: 00:00")
+    product_counter_var = tk.StringVar(value="Contador de productos: 0")
+    product_height_var = tk.StringVar(value="Altura: N/A")
+    serial_number_var = tk.StringVar(value="Número Serial: N/A")
+
+    tk.Label(product_data_frame, text="Producto:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, textvariable=product_id_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=0, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, text="Tiempo:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, textvariable=product_read_time_display_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=1, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, text="Contador de Productos:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, textvariable=product_counter_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=2, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, text="Altura:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=3, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, textvariable=product_height_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=3, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, text="Número Serial:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=4, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, textvariable=serial_number_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=4, column=1, sticky="w", pady=2, padx=5)
+
+    # --- REGISTRO DE ENTRADA ---
+    registro_entrada_frame = tk.LabelFrame(main_content_frame, text="REGISTRO DE ENTRADA", font=FONT_SECTION_HEADER,
+                                           bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE, bd=1, relief="solid",
+                                           highlightbackground=COLOR_BORDER_SUBTLE, highlightthickness=1, padx=20, pady=15)
+    registro_entrada_frame.pack(pady=(0, 25), fill="x")
+    registro_var = tk.StringVar()
+    password_var = tk.StringVar()
+
+    registro_entrada_frame.grid_columnconfigure(0, weight=1)
+    registro_entrada_frame.grid_columnconfigure(1, weight=2)
+
+    tk.Label(registro_entrada_frame, text="Número de Registro:", font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=5, padx=5)
+    entry_registro_login = tk.Entry(registro_entrada_frame, textvariable=registro_var, font=FONT_ENTRY, bd=1, relief="solid",
+                                    bg=COLOR_BACKGROUND_TERTIARY, fg=COLOR_TEXT_PRIMARY, insertbackground=COLOR_TEXT_PRIMARY,
+                                    highlightbackground=COLOR_BORDER_SUBTLE, highlightcolor=COLOR_FOCUS_BORDER, highlightthickness=1)
+    entry_registro_login.grid(row=0, column=1, sticky="ew", pady=5, padx=5); entry_registro_login.focus_set()
+
+    tk.Label(registro_entrada_frame, text="Contraseña:", font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=5, padx=5)
+    entry_password_login = tk.Entry(registro_entrada_frame, textvariable=password_var, font=FONT_ENTRY, bd=1, relief="solid",
+                                    bg=COLOR_BACKGROUND_TERTIARY, fg=COLOR_TEXT_PRIMARY, insertbackground=COLOR_TEXT_PRIMARY,
+                                    highlightbackground=COLOR_BORDER_SUBTLE, highlightcolor=COLOR_FOCUS_BORDER, highlightthickness=1, show="*")
+    entry_password_login.grid(row=1, column=1, sticky="ew", pady=5, padx=5)
+
+    button_frame_bottom = tk.Frame(main_content_frame, bg=COLOR_BACKGROUND_PRIMARY)
+    button_frame_bottom.pack(pady=(10, 20), fill="x", expand=True)
+    button_frame_bottom.grid_columnconfigure(0, weight=1)
+    button_frame_bottom.grid_columnconfigure(1, weight=1)
+
+    btn_register_entry = tk.Button(button_frame_bottom, text="Registrar Entrada",
+                                   command=lambda: attempt_machine_login(parent_root, registro_var, password_var, entry_registro_login),
+                                   bg=COLOR_ACCENT_BLUE, fg=COLOR_BACKGROUND_PRIMARY, font=FONT_BUTTON, width=18, height=2, cursor="hand2", bd=0, relief="flat",
+                                   activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
+    btn_register_entry.grid(row=0, column=0, padx=10, pady=5, sticky="e")
+
+    btn_close_all = tk.Button(button_frame_bottom, text="Salir", command=on_main_window_close,
+                              bg=COLOR_DANGER_RED, fg=COLOR_TEXT_PRIMARY, font=FONT_BUTTON, width=18, height=2, cursor="hand2", bd=0, relief="flat",
+                              activebackground=COLOR_DANGER_RED, activeforeground=COLOR_TEXT_PRIMARY)
+    btn_close_all.grid(row=0, column=1, padx=10, pady=5, sticky="w")
+
+    parent_root.bind('<Return>', lambda event=None: attempt_machine_login(parent_root, registro_var, password_var, entry_registro_login))
+
+def on_main_window_close():
+    global logged_in_user_name_global
+    stop_monitoring_thread()
+
+    if logged_in_user_name_global:
+        write_log("APP_EXIT", f"Aplicación cerrada con usuario '{logged_in_user_name_global}' loggeado.")
+    else:
+        write_log("APP_EXIT", "Aplicación cerrada (usuario no loggeado o sesión terminada).")
+
+    try: _hb_write(0)  # forzar 0 al salir
+    except: pass
+
+    if os.path.exists(LASER_CODE_FILE_PATH):
+        try: os.remove(LASER_CODE_FILE_PATH)
+        except Exception as e: write_log("ERROR", f"Error al eliminar active_laser_code.csv: {e}")
+
+    if root_machine_app and root_machine_app.winfo_exists():
+        root_machine_app.destroy()
+    sys.exit(0)
+
+# ================================ MAIN =====================================
+_mysql_init_schema()  # crea BD si no existe (no truena si MySQL no responde)
+
+if __name__ == "__main__":
+    root_machine_app = tk.Tk()
+
+    # asegurar directorios
+    for d in [
+        os.path.dirname(NOMBRE_ARCHIVO_LOGS),
+        os.path.dirname(NOMBRE_ARCHIVO_REGISTROS),
+        os.path.dirname(LASER_CODE_FILE_PATH),
+        os.path.dirname(PRODUCT_LOG_FILE_PATH),
+    ]:
+        if d and not os.path.exists(d):
+            os.makedirs(d, exist_ok=True)
+
+    style = ttk.Style()
+    style.theme_create("custom_theme", parent="alt", settings={
+        "TNotebook": {"configure": {"tabmargins": [2, 5, 2, 0], "background": COLOR_BACKGROUND_SECONDARY}},
+        "TNotebook.Tab": {
+            "configure": {"padding": [10, 5], "background": COLOR_BACKGROUND_TERTIARY, "foreground": COLOR_TEXT_LIGHT},
+            "map": {"background": [("selected", COLOR_BACKGROUND_PRIMARY)],
+                    "foreground": [("selected", COLOR_ACCENT_BLUE)],
+                    "expand": [("selected", [1,1,1,0])]}
+        }
+    })
+    style.theme_use("custom_theme")
+
+    show_initial_screen(root_machine_app)
+    start_monitoring_thread()
+    root_machine_app.protocol("WM_DELETE_WINDOW", on_main_window_close)
+    root_machine_app.mainloop()
+
+    stop_monitoring_thread()
+    sys.exit(0)
