@@ -8,6 +8,8 @@ import time
 import snap7
 import threading
 import tkinter.ttk as ttk
+from tkinter import PhotoImage
+import os
 import csv
 from cryptography.fernet import Fernet
 import mysql.connector
@@ -68,7 +70,18 @@ FONT_BUTTON          = ("Segoe UI", 13, "bold")
 FONT_STATUS_INFO     = ("Consolas", 18, "bold")
 FONT_STATUS_ERROR    = ("Consolas", 18, "bold")
 
-# ============================= GLOBALES GUI ==============================
+
+
+# ============================= ICONO PERSONALIZADO ==============================
+ICONO_PATH = os.path.expanduser(r"~/Downloads/logo_dragon2.png")
+
+def set_custom_icon(window):
+    try:
+        if os.path.exists(ICONO_PATH):
+            window.iconbitmap(ICONO_PATH)
+    except Exception:
+        pass  # Si falla, simplemente ignora y usa el icono por defecto
+
 root_machine_app = None
 login_successful_machine = False
 
@@ -769,6 +782,7 @@ def logout_machine_user():
 def show_serial_authorization_window():
     """Ventana de autorización para reestablecer número serial"""
     auth_window = tk.Toplevel(root_machine_app)
+    set_custom_icon(auth_window)
     auth_window.title("Autorización Requerida")
     auth_window.geometry("380x250")
     auth_window.configure(bg=COLOR_BACKGROUND_PRIMARY)
@@ -838,6 +852,7 @@ def show_serial_authorization_window():
 def show_serial_initialization_window():
     """Ventana para reestablecer número serial"""
     serial_window = tk.Toplevel(root_machine_app)
+    set_custom_icon(serial_window)
     serial_window.title("Reestablecer Número Serial")
     serial_window.geometry("400x200")
     serial_window.configure(bg=COLOR_BACKGROUND_PRIMARY)
@@ -943,6 +958,7 @@ def show_serial_initialization_window():
 
 def show_logs_window():
     log_window = tk.Toplevel(root_machine_app)
+    set_custom_icon(log_window)
     log_window.title("Historial de Registros")
     log_window.geometry("850x400")
     log_window.configure(bg=COLOR_BACKGROUND_PRIMARY)
@@ -1160,6 +1176,7 @@ def show_logged_in_screen(parent_root, user_name, laser_code):
     root_machine_app.title("MANUAL LASERCELL")
     root_machine_app.geometry("640x850")
     root_machine_app.configure(bg=COLOR_BACKGROUND_PRIMARY)
+    set_custom_icon(root_machine_app)
 
     for w in root_machine_app.winfo_children():
         w.destroy()
@@ -1508,7 +1525,9 @@ def on_main_window_close():
 _mysql_init_schema()  # crea BD si no existe (no truena si MySQL no responde)
 
 if __name__ == "__main__":
+
     root_machine_app = tk.Tk()
+    set_custom_icon(root_machine_app)
 
     # asegurar directorios
     for d in [

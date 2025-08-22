@@ -226,3 +226,26 @@
 2025-08-22 09:20:23,APP_EXIT,Aplicación cerrada (usuario no loggeado).
 2025-08-22 09:20:44,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
 2025-08-22 09:20:51,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-22 09:45:39,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-22 09:45:53,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-22 09:45:57,SERIAL,Número serial reestablecido: 000001
+2025-08-22 09:45:57,ERROR,Serial 000001 - PLC falló: No se pudo conectar al PLC
+2025-08-22 09:48:36,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-22 09:52:22,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 09:52:35,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-22 09:52:43,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-22 09:53:59,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 09:56:31,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 10:04:05,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 10:09:51,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 10:11:32,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-22 10:11:47,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-22 10:14:46,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 10:14:49,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-22 10:14:53,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 10:15:25,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-22 10:15:33,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 10:15:47,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-22 10:15:54,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 10:15:58,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-22 10:16:00,APP_EXIT,Aplicación cerrada (usuario no loggeado).
