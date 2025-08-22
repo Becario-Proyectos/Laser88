@@ -1,0 +1,228 @@
+2025-08-21 10:05:12,INFO,Intento de login - Usuario: 10195
+2025-08-21 10:05:12,INFO,Login exitoso vía MySQL - Usuario: 10195
+2025-08-21 10:05:12,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:05:31,LOGOUT,Usuario 'Alejandro Tejeda' (AT) ha cerrado sesión.
+2025-08-21 10:05:34,INFO,Intento de login - Usuario: 1
+2025-08-21 10:05:34,INFO,"Usuario no encontrado en MySQL, intentando TXT offline"
+2025-08-21 10:05:34,WARNING,Login fallido - Usuario no encontrado: 1
+2025-08-21 10:05:37,INFO,Intento de login - Usuario: 2
+2025-08-21 10:05:37,INFO,"Usuario no encontrado en MySQL, intentando TXT offline"
+2025-08-21 10:05:37,WARNING,Login fallido - Usuario no encontrado: 2
+2025-08-21 10:05:46,INFO,Intento de login - Usuario: 45
+2025-08-21 10:05:46,INFO,"Usuario no encontrado en MySQL, intentando TXT offline"
+2025-08-21 10:05:46,WARNING,Login fallido - Usuario no encontrado: 45
+2025-08-21 10:05:50,INFO,Intento de login - Usuario: r4
+2025-08-21 10:05:50,ERROR,Login MySQL error: invalid literal for int() with base 10: 'r4'
+2025-08-21 10:05:50,WARNING,"MySQL no disponible, intentando autenticación offline"
+2025-08-21 10:05:50,WARNING,Login fallido vía TXT offline - Usuario: r4
+2025-08-21 10:05:56,INFO,Intento de login - Usuario: 10195
+2025-08-21 10:05:56,INFO,Login exitoso vía MySQL - Usuario: 10195
+2025-08-21 10:05:56,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:06:40,LOGOUT,Usuario 'Alejandro Tejeda' (AT) ha cerrado sesión.
+2025-08-21 10:06:46,INFO,Intento de login - Usuario: 1882
+2025-08-21 10:06:46,INFO,"Usuario no encontrado en MySQL, intentando TXT offline"
+2025-08-21 10:06:46,WARNING,Login fallido - Usuario no encontrado: 1882
+2025-08-21 10:06:51,INFO,Intento de login - Usuario: 1882
+2025-08-21 10:06:51,INFO,Login exitoso vía MySQL - Usuario: 1882
+2025-08-21 10:06:51,LOGIN,'Luz María Olmos Ramírez' (LO) ha iniciado sesión.
+2025-08-21 10:06:51,INFO,Intento de login - Usuario: 1882
+2025-08-21 10:06:51,INFO,Login exitoso vía MySQL - Usuario: 1882
+2025-08-21 10:06:51,LOGIN,'Luz María Olmos Ramírez' (LO) ha iniciado sesión.
+2025-08-21 10:07:18,APP_EXIT,Aplicación cerrada con usuario 'Luz María Olmos Ramírez' loggeado.
+2025-08-21 10:07:32,INFO,Intento de login - Usuario: 10195
+2025-08-21 10:07:32,INFO,Login exitoso vía MySQL - Usuario: 10195
+2025-08-21 10:07:32,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:12:38,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:16:38,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:16:47,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:17:38,INFO,Intento de login - Usuario: 10195
+2025-08-21 10:17:38,INFO,Login exitoso vía MySQL - Usuario: 10195
+2025-08-21 10:17:38,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:17:42,LOGOUT,Usuario 'Alejandro Tejeda' (AT) ha cerrado sesión.
+2025-08-21 10:18:01,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:18:24,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:18:44,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:19:46,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:20:44,INFO,Intento de login - Usuario: 10195
+2025-08-21 10:20:44,INFO,Login exitoso vía MySQL - Usuario: 10195
+2025-08-21 10:20:44,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:21:00,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:21:05,INFO,Intento de login - Usuario: 10195
+2025-08-21 10:21:05,INFO,Login exitoso vía MySQL - Usuario: 10195
+2025-08-21 10:21:05,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:21:20,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:21:31,INFO,Intento de login - Usuario: 1882
+2025-08-21 10:21:31,INFO,Login exitoso vía MySQL - Usuario: 1882
+2025-08-21 10:21:31,LOGIN,'Luz María Olmos Ramírez' (LO) ha iniciado sesión.
+2025-08-21 10:21:43,LOGOUT,Usuario 'Luz María Olmos Ramírez' (LO) ha cerrado sesión.
+2025-08-21 10:21:45,INFO,Intento de login - Usuario: 10195
+2025-08-21 10:21:45,INFO,Login exitoso vía MySQL - Usuario: 10195
+2025-08-21 10:21:45,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:21:53,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:24:09,INFO,Intento de login - Usuario: 10195
+2025-08-21 10:24:09,INFO,Login exitoso vía MySQL - Usuario: 10195
+2025-08-21 10:24:09,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:24:16,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:24:24,INFO,Intento de login - Usuario: 10195
+2025-08-21 10:24:24,INFO,Login exitoso vía MySQL - Usuario: 10195
+2025-08-21 10:24:24,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:24:43,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:27:10,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:27:17,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:29:23,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:29:39,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:29:57,LOGOUT,Usuario 'Alejandro Tejeda' (AT) ha cerrado sesión.
+2025-08-21 10:30:00,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:30:13,LOGOUT,Usuario 'Alejandro Tejeda' (AT) ha cerrado sesión.
+2025-08-21 10:30:22,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:30:28,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:31:22,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:31:40,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:31:45,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:31:49,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:33:35,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:36:36,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:37:02,SERIAL,Número serial inicializado: 1
+2025-08-21 10:37:41,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:37:59,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:40:39,SERIAL,Número serial establecido: 1
+2025-08-21 10:41:01,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:44:57,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:45:52,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:47:15,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:49:10,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:50:15,APP_EXIT,Aplicación cerrada (usuario no loggeado o sesión terminada).
+2025-08-21 10:51:35,AUTH,Intento de acceso fallido para establecer serial - Usuario: w
+2025-08-21 10:51:39,AUTH,Intento de acceso fallido para establecer serial - Usuario: 4
+2025-08-21 10:51:48,AUTH,Acceso autorizado para establecer serial - Usuario: ADMIN
+2025-08-21 10:51:59,SERIAL,Número serial establecido: 1
+2025-08-21 10:52:09,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 10:52:31,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 10:53:13,AUTH,Acceso autorizado para establecer serial - Usuario: ADMIN
+2025-08-21 10:53:18,SERIAL,Número serial establecido: 1
+2025-08-21 10:53:21,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 10:55:32,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 10:55:50,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 10:56:00,SERIAL,Número serial reestablecido: 3
+2025-08-21 10:56:06,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 10:56:44,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 11:05:54,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 11:06:13,AUTH,Intento de acceso fallido para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:06:19,AUTH,Intento de acceso fallido para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:06:26,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:07:40,SERIAL,Número serial reestablecido: 000001
+2025-08-21 11:13:00,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:13:15,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:13:21,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:13:24,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:13:27,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:13:30,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:13:33,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:13:36,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:13:39,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:13:47,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:14:12,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:17:08,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:17:18,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:18:17,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:18:37,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:19:04,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:19:15,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:19:33,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:21:36,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:23:51,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:24:33,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:24:50,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:27:26,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:27:32,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:28:01,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:28:22,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:28:50,AUTH,Intento de acceso fallido para reestablecer serial - Usuario: 10195
+2025-08-21 11:29:05,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:29:12,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:29:36,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:29:46,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:31:21,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:31:37,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:32:30,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:33:36,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:33:44,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:35:21,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:43:03,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-21 11:43:08,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 11:43:22,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 11:44:19,SERIAL,Número serial reestablecido: 999999
+2025-08-21 11:51:26,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 12:22:34,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 12:23:34,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 12:24:32,SERIAL,Número serial reestablecido: 000001
+2025-08-21 12:24:32,ERROR,Serial 000001 - PLC falló: No se pudo conectar al PLC
+2025-08-21 12:25:20,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 12:25:26,SERIAL,Número serial reestablecido: 000002
+2025-08-21 12:25:26,ERROR,Serial 000002 - PLC falló: No se pudo conectar al PLC
+2025-08-21 12:26:15,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 12:27:57,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 12:28:06,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 12:28:12,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 12:28:22,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 12:28:27,SERIAL,Número serial reestablecido: 000001
+2025-08-21 12:28:27,ERROR,Serial 000001 - PLC falló: No se pudo conectar al PLC
+2025-08-21 12:28:46,AUTH,Intento de acceso fallido para reestablecer serial - Usuario: E
+2025-08-21 13:37:46,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 13:39:04,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 13:40:00,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 13:46:35,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 13:47:18,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 13:47:28,SERIAL,Número serial reestablecido: 000001
+2025-08-21 13:47:28,ERROR,Serial 000001 - PLC falló: No se pudo conectar al PLC
+2025-08-21 13:51:06,SAVE_DATA,Datos actuales guardados en: C:/VCST/Aplicaciones/Saved_Data.txt
+2025-08-21 14:12:05,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 14:15:11,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 14:15:33,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 14:16:07,SERIAL,Número serial reestablecido: 000002
+2025-08-21 14:16:07,ERROR,Serial 000002 - PLC falló: No se pudo conectar al PLC
+2025-08-21 14:20:26,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-21 14:27:16,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-21 14:27:45,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 14:27:54,SERIAL,Número serial reestablecido: 000009
+2025-08-21 14:27:54,ERROR,Serial 000009 - PLC falló: No se pudo conectar al PLC
+2025-08-21 14:28:05,LOGOUT,Usuario 'Alejandro Tejeda' (AT) ha cerrado sesión.
+2025-08-21 14:28:54,LOGIN,'Offline User' (OF) ha iniciado sesión.
+2025-08-21 14:29:18,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-21 14:29:24,SERIAL,Número serial reestablecido: 999911
+2025-08-21 14:29:24,ERROR,Serial 999911 - PLC falló: No se pudo conectar al PLC
+2025-08-21 14:31:18,LOGOUT,Usuario 'Offline User' (OF) ha cerrado sesión.
+2025-08-21 14:31:20,LOGIN,'Offline User' (OF) ha iniciado sesión.
+2025-08-21 14:32:18,APP_EXIT,Aplicación cerrada con usuario 'Offline User' loggeado.
+2025-08-21 14:33:56,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-21 14:34:03,LOGIN,'Offline User' (OF) ha iniciado sesión.
+2025-08-21 14:39:22,APP_EXIT,Aplicación cerrada con usuario 'Offline User' loggeado.
+2025-08-21 14:40:00,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-21 14:40:28,LOGIN,'offline' (OF) ha iniciado sesión.
+2025-08-21 14:40:55,APP_EXIT,Aplicación cerrada con usuario 'offline' loggeado.
+2025-08-21 14:41:38,LOGIN,'offline' (OF) ha iniciado sesión.
+2025-08-21 14:42:49,APP_EXIT,Aplicación cerrada con usuario 'offline' loggeado.
+2025-08-21 14:43:06,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-21 14:43:12,LOGIN,'offline' (OF) ha iniciado sesión.
+2025-08-21 14:43:37,APP_EXIT,Aplicación cerrada con usuario 'offline' loggeado.
+2025-08-21 14:54:39,LOGIN,'Offline' (UF) ha iniciado sesión.
+2025-08-21 14:54:46,APP_EXIT,Aplicación cerrada con usuario 'Offline' loggeado.
+2025-08-21 14:54:51,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-21 14:55:25,LOGIN,'Offline' (UF) ha iniciado sesión.
+2025-08-21 14:55:29,LOGOUT,Usuario 'Offline' (UF) ha cerrado sesión.
+2025-08-21 14:55:42,AUTH_BLOCKED,Acceso denegado - Usuario 1 está en lista de bajas pendientes
+2025-08-21 14:55:49,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-22 07:42:09,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-22 07:44:04,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-22 07:44:25,SERIAL,Número serial reestablecido: 090909
+2025-08-22 07:44:25,ERROR,Serial 090909 - PLC falló: No se pudo conectar al PLC
+2025-08-22 07:45:21,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-22 08:10:01,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-22 08:12:01,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-22 08:38:35,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-22 08:40:05,LOGOUT,Usuario 'Alejandro Tejeda' (AT) ha cerrado sesión.
+2025-08-22 08:40:06,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-22 09:07:20,LOGOUT,Usuario 'Alejandro Tejeda' (AT) ha cerrado sesión.
+2025-08-22 09:20:23,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-22 09:20:44,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-22 09:20:51,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.

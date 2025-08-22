@@ -15,3 +15,11 @@ None - Eliminado de TXT y MySQL
 2025-08-20,L,3,LL,LL - Eliminado de TXT y MySQL
 2025-08-20,ee,1,EE,EE - Eliminado de TXT y MySQL
 2025-08-20,RR,2,R,RR - Eliminado de TXT y MySQL
+2025-08-20,EE,1,EE,EE - Eliminado de TXT y MySQL
+2025-08-20,E,1,1,RE - Eliminado de TXT y MySQL
+2025-08-20,OFFLINE,1,OFF,OF - Eliminado de TXT y MySQL
+2025-08-20,OFFLINE TEST,1,1,OF - Ya no existe en MySQL, marcado como sincronizado
+2025-08-20,OFF TEST,1,1,RE - Ya no existe en MySQL, marcado como sincronizado
+2025-08-21,Offline User,1,1,OF - Baja sincronizada con MySQL
+2025-08-21,offline,1,1,OF - Baja sincronizada con MySQL
+2025-08-21,Offline,1,1,UF - Ya no existe en MySQL, marcado como sincronizado

@@ -1,4 +1,4 @@
-# appLaserV16 - Heartbeat 1->0 por ciclo + Login MySQL/TXT cifrado
+#LASER - 88
 import tkinter as tk
 from tkinter import messagebox, filedialog, scrolledtext
 import os
@@ -12,16 +12,20 @@ import csv
 from cryptography.fernet import Fernet
 import mysql.connector
 
-# ----------------------------- RUTAS / ARCHIVOS -----------------------------
-NOMBRE_ARCHIVO_REGISTROS = "C:/VCST/Aplicaciones/DB_Registro.txt"  # TXT cifrado (respaldo)
+# ============================= RUTAS / ARCHIVOS =============================
+NOMBRE_ARCHIVO_REGISTROS = "C:/VCST/Aplicaciones/DB_Registro.txt"  
 NOMBRE_ARCHIVO_PARTES   = "C:/VCST/Aplicaciones/DB_Partes.txt"
 
-NOMBRE_ARCHIVO_LOGS     = "C:/VCST/Aplicaciones/App_Laser/Logs/App_Logs.txt"
+NOMBRE_ARCHIVO_REGISTROS_PENDIENTES = "C:/VCST/Aplicaciones/DB_Registro_pendiente.txt"
+NOMBRE_ARCHIVO_BAJAS_PENDIENTES = "C:/VCST/Aplicaciones/DB_Bajas_pendiente.txt"
+
+NOMBRE_ARCHIVO_LOGS     = "C:/VCST/Aplicaciones/App_Laser/Logs/App_Logs.csv"
 LASER_CODE_FILE_PATH    = "C:/VCST/Aplicaciones/App_Laser/active_laser_code.csv"
 PRODUCT_LOG_FILE_PATH   = "C:/VCST/Aplicaciones/App_Laser/App_Logs/Product_Log.csv"
+SERIAL_NUMBER_LOG_PATH  = "C:/VCST/Aplicaciones/App_Laser/App_Logs/Serial_Numbers.csv"
 CLAVE_PATH              = "C:/VCST/Aplicaciones/clave2.key"       
 
-# ------------------------------- PLC CONFIG ---------------------------------
+# ============================= PLC CONFIG ==================================
 PLC_IP = '192.168.21.50'
 RACK = 0
 SLOT = 1
@@ -33,7 +37,7 @@ HEARTBEAT_DB = DB_NUMBER
 HEARTBEAT_BYTE_OFFSET = 1    
 HB_PULSE_SECONDS = 0.10      
 
-# --------------------------------- COLORES ----------------------------------
+# ============================== COLORES ==============================
 COLOR_BACKGROUND_PRIMARY   = "#2C3E50"
 COLOR_BACKGROUND_SECONDARY = "#34495E"
 COLOR_BACKGROUND_TERTIARY  = "#4A627A"
@@ -54,7 +58,7 @@ COLOR_PLC_WARNING      = "#F1C40F"
 COLOR_SUBMENU_BACKGROUND = "#D3D3D3"
 COLOR_SUBMENU_FOREGROUND = "#000000"
 
-# ---------------------------------- FUENTES ---------------------------------
+# ============================= FUENTES =================================
 FONT_TITLE_APP       = ("Segoe UI", 28, "bold")
 FONT_SECTION_HEADER  = ("Segoe UI", 14, "bold")
 FONT_LABEL           = ("Segoe UI", 13, "bold")
@@ -64,7 +68,7 @@ FONT_BUTTON          = ("Segoe UI", 13, "bold")
 FONT_STATUS_INFO     = ("Consolas", 18, "bold")
 FONT_STATUS_ERROR    = ("Consolas", 18, "bold")
 
-# ------------------------------- GLOBALES GUI -------------------------------
+# ============================= GLOBALES GUI ==============================
 root_machine_app = None
 login_successful_machine = False
 
@@ -102,22 +106,42 @@ logged_in_datetime_global = None
 
 download_menu_instance = None
 logs_menu_instance = None
+serial_menu_instance = None
 
-# ------------------------- MySQL CONFIG / TABLAS ----------------------------
-DB_HOST = "10.4.0.22"
+# ============================= MySQL CONFIG / TABLAS =============================
+DB_HOST = "10.4.0.103"
 DB_USER = "wamp_user"
-DB_PASSWORD = "W4mp_us3r_CAT"
-DB_NAME = "Caterpillar_laserdatabase"
+DB_PASSWORD = "wamp"
+DB_NAME = "test"
+TABLE_USERS = "Registered_personnel"
 
-TABLE_USERS       = "registered_personnel"   # credenciales ya existentes
-# (las tablas de snapshots/producto se pueden crear después si lo necesitas)
+# ========================== LOG_STATUS EN PLC =============================
+def set_log_status_in_plc(value: bool):
+    global plc_client
+    try:
+        if not plc_client or not plc_client.get_connected():
+            if not connect_to_plc():
+                return False
+        # Leer el primer byte (offset 0)
+        data = bytearray(plc_client.db_read(DB_NUMBER, 0, 1))       #ALTERNO A GET_BOOL CON SNAP7
+        if value:
+            data[0] |= 0x08  # Set bit 3 (0x08 = 00001000b)  EQUIVALENTE A "Log_Status = 1"
+        else:
+            data[0] &= 0xF7  # Clear bit 3 (0xF7 = 11110111b) EQUIVALENTE A "Log_Status = 0"
+        plc_client.db_write(DB_NUMBER, 0, data)
+        return True
+    except Exception as e:
+        write_log("ERROR", f"Error al escribir Log_Status en PLC: {e}")
+        return False
 
 # =============================== UTILIDADES LOG =============================
 def write_log(event_type, message):
+    import csv
     try:
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(NOMBRE_ARCHIVO_LOGS, "a", encoding="utf-8") as f:
-            f.write(f"[{ts}] [{event_type}] {message}\n")
+        with open(NOMBRE_ARCHIVO_LOGS, "a", encoding="utf-8", newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([ts, event_type, message])
     except Exception as e:
         try:
             messagebox.showerror("Error de Logs",
@@ -127,11 +151,13 @@ def write_log(event_type, message):
             pass
 
 def read_logs():
+    import csv
     if not os.path.exists(NOMBRE_ARCHIVO_LOGS):
         return ["No hay registros previos."]
     try:
         with open(NOMBRE_ARCHIVO_LOGS, "r", encoding="utf-8", errors="replace") as f:
-            return [x.rstrip("\n") for x in f.readlines()]
+            reader = csv.reader(f)
+            return [", ".join(row) for row in reader]
     except Exception as e:
         return [f"Error al leer logs: {e}"]
 
@@ -201,6 +227,11 @@ def leer_registros_descifrados(archivo):
                              parent=root_machine_app)
         return []
     if not os.path.exists(archivo):
+        # Para archivos de pendientes, esto es normal si no hay registros pendientes
+        if "pendiente" in archivo.lower():
+            return []
+        # Para el archivo principal, mostrar advertencia
+        write_log("WARNING", f"Archivo de registros no encontrado: {archivo}")
         return []
 
     registros = []
@@ -217,19 +248,48 @@ def leer_registros_descifrados(archivo):
                     # línea corrupta o clave incorrecta
                     continue
     except Exception as e:
-        messagebox.showerror("Error de lectura",
-                             f"No se pudo leer el archivo de registros:\n{e}",
-                             parent=root_machine_app)
+        write_log("ERROR", f"Error leyendo archivo {archivo}: {e}")
         return []
     return registros
+
+def check_user_in_pending_deletions(numero_registro_input):
+    """
+    Verifica si un usuario está en la lista de bajas pendientes.
+    Formato esperado tras descifrar: información_del_usuario_dado_de_baja
+    Retorna True si el usuario está en la lista de bajas (NO debe poder acceder)
+    """
+    bajas_pendientes = leer_registros_descifrados(NOMBRE_ARCHIVO_BAJAS_PENDIENTES)
+    for line in bajas_pendientes:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(',')
+
+        # Buscar el índice del número (entero) porque el nombre puede tener comas
+        num_index = -1
+        for i in range(2, len(parts)):
+            if parts[i].strip().isdigit():
+                num_index = i
+                break
+        if num_index == -1:
+            continue
+
+        numero = parts[num_index].strip()
+        if numero == numero_registro_input:
+            return True  # Usuario encontrado en bajas pendientes - NO debe poder acceder
+    
+    return False  # Usuario NO está en bajas pendientes - puede acceder si las credenciales son correctas
 
 def check_credentials_from_txt_encrypted(numero_registro_input, password_input):
     """
     Formato esperado tras descifrar:
       fecha,Nombre(…puede tener comas…),Numero,Password,Code_Laser
+    
+    Busca primero en el archivo principal, luego en pendientes para soporte offline completo.
     """
-    registros = leer_registros_descifrados(NOMBRE_ARCHIVO_REGISTROS)
-    for line in registros:
+    # Buscar en archivo principal
+    registros_principales = leer_registros_descifrados(NOMBRE_ARCHIVO_REGISTROS)
+    for line in registros_principales:
         line = line.strip()
         if not line:
             continue
@@ -251,17 +311,51 @@ def check_credentials_from_txt_encrypted(numero_registro_input, password_input):
 
         if numero == numero_registro_input and pwd == password_input:
             return True, (nombre, code)
+    
+    # Si no se encontró en principal, buscar en pendientes (para registros offline)
+    registros_pendientes = leer_registros_descifrados(NOMBRE_ARCHIVO_REGISTROS_PENDIENTES)
+    for line in registros_pendientes:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(',')
+
+        # localizar el índice del número (entero) porque el nombre puede tener comas
+        num_index = -1
+        for i in range(2, len(parts)):
+            if parts[i].strip().isdigit():
+                num_index = i
+                break
+        if num_index == -1 or num_index + 2 >= len(parts):
+            continue
+
+        nombre = ",".join(parts[1:num_index]).strip()
+        numero = parts[num_index].strip()
+        pwd    = parts[num_index + 1].strip()
+        code   = parts[num_index + 2].strip()
+
+        if numero == numero_registro_input and pwd == password_input:
+            return True, (nombre, code)
+    
     return False, None
 
 def check_credentials(numero_registro_input, password_input):
+    # PRIMERO: Verificar si el usuario está en la lista de bajas pendientes
+    if check_user_in_pending_deletions(numero_registro_input):
+        write_log("AUTH_BLOCKED", f"Acceso denegado - Usuario {numero_registro_input} está en lista de bajas pendientes")
+        return False, None
+    
+    # Intentar MySQL primero
     ok, user = check_credentials_from_mysql(numero_registro_input, password_input)
     if ok is True:
         return True, user
     if ok is None:
         # MySQL caído -> TXT
-        return check_credentials_from_txt_encrypted(numero_registro_input, password_input)
-    # ok == False -> probar TXT como compatibilidad/offline
-    return check_credentials_from_txt_encrypted(numero_registro_input, password_input)
+        result = check_credentials_from_txt_encrypted(numero_registro_input, password_input)
+        return result
+    # ok == False -> usuario no encontrado en MySQL, probar TXT como compatibilidad/offline
+    result = check_credentials_from_txt_encrypted(numero_registro_input, password_input)
+    return result
 
 # ============================== PLC / HEARTBEAT =============================
 def connect_to_plc():
@@ -306,6 +400,55 @@ def disconnect_from_plc():
             plc_client.disconnect()
     except Exception:
         pass
+
+def write_serial_to_plc(serial_number):
+    """
+    Escribe el número serial como STRING[32] en DB17.DBW150 (offset 150)
+    """
+    global plc_client
+    try:
+        if not plc_client or not plc_client.get_connected():
+            if not connect_to_plc():
+                return False, "No se pudo conectar al PLC"
+        
+        # Preparar el string para escritura - STRING[32] requiere longitud + datos
+        # Formato: byte de longitud + datos (máximo 32 caracteres)
+        serial_str = str(serial_number)[:32]  # Truncar a 32 caracteres máximo
+        
+        # Crear bytearray para STRING[32]: 1 byte longitud + hasta 32 bytes datos + 1 byte reservado
+        string_data = bytearray(34)  # STRING[32] = 34 bytes total
+        string_data[0] = 32  # Longitud máxima declarada
+        string_data[1] = len(serial_str)  # Longitud actual
+        
+        # Copiar los datos del string
+        for i, char in enumerate(serial_str):
+            string_data[2 + i] = ord(char)
+        
+        # Escribir al PLC en DB17, offset 150
+        plc_client.db_write(DB_NUMBER, 150, string_data)
+        return True, "Serial escrito correctamente al PLC"
+        
+    except Exception as e:
+        return False, f"Error al escribir serial al PLC: {e}"
+
+def save_serial_to_csv(serial_number):
+    """
+    Guarda únicamente el número serial en un archivo CSV dedicado, sobreescribiendo el anterior
+    """
+    try:
+        # Crear directorio si no existe
+        os.makedirs(os.path.dirname(SERIAL_NUMBER_LOG_PATH), exist_ok=True)
+        
+        # Usar modo "w" para sobreescribir el archivo completo
+        with open(SERIAL_NUMBER_LOG_PATH, "w", newline='', encoding="utf-8") as f:
+            writer = csv.writer(f)
+            # Solo escribir el número serial actual, sobreescribiendo cualquier contenido anterior
+            writer.writerow([serial_number])
+        
+        return True, f"Serial guardado en: {SERIAL_NUMBER_LOG_PATH}"
+        
+    except Exception as e:
+        return False, f"Error al guardar serial en CSV: {e}"
 
 # ===================== ACTUALIZACIÓN GUI (desde el hilo) ====================
 def update_gui_plc_status(is_connected, plc_internal_status_byte, product_id_value, product_counter_value, product_height_value,
@@ -412,12 +555,88 @@ def plc_monitoring_loop_logic():
             serial_number_value      = snap7.util.get_string(data, 150).strip('\x00')
             add_info1_value          = snap7.util.get_string(data, 218).strip('\x00')
             add_info2_value          = snap7.util.get_string(data, 252).strip('\x00')
+    
+
 
             # Log de producto cuando cambia el contador
             if last_read_product_counter is None or current_product_counter != last_read_product_counter:
                 last_product_time = datetime.now()
                 last_read_product_counter = current_product_counter
 
+                # --- NUEVO: Buscar y escribir CAT_NUMBER al PLC antes de leerlo ---
+                def buscar_cat_number(numero_parte):
+                    # 1. Buscar en MySQL
+                    try:
+                        conn = _mysql_get_conn()
+                        if conn:
+                            cur = conn.cursor()
+                            cur.execute("SELECT numero_cat FROM registered_parts WHERE numero_parte=%s", (numero_parte,))
+                            row = cur.fetchone()
+                            cur.close(); conn.close()
+                            if row and row[0]:
+                                return str(row[0])
+                    except Exception:
+                        pass
+                    # 2. Buscar en TXT cifrado
+                    try:
+                        from cryptography.fernet import Fernet
+                        registros = leer_registros_descifrados(NOMBRE_ARCHIVO_PARTES)
+                        for line in registros:
+                            parts = line.strip().split(',')
+                            if len(parts) >= 4 and parts[2].strip() == numero_parte:
+                                return parts[3].strip()
+                    except Exception:
+                        pass
+                    return ""
+
+                # Buscar el CAT_NUMBER usando el número de parte (product_id_value)
+                cat_number = buscar_cat_number(product_id_value)
+
+                # Escribir CAT_NUMBER al PLC (DB17, offset 184, STRING[32])
+                def write_cat_number_to_plc(cat_number):
+                    global plc_client
+                    try:
+                        if not plc_client or not plc_client.get_connected():
+                            if not connect_to_plc():
+                                return False
+                        cat_str = str(cat_number)[:32]
+                        string_data = bytearray(34)
+                        string_data[0] = 32
+                        string_data[1] = len(cat_str)
+                        for i, char in enumerate(cat_str):
+                            string_data[2 + i] = ord(char)
+                        plc_client.db_write(DB_NUMBER, 184, string_data)
+                        return True
+                    except Exception as e:
+                        write_log("ERROR", f"Error al escribir CAT_NUMBER al PLC: {e}")
+                        return False
+
+                write_cat_number_to_plc(cat_number)
+
+                # Leer el bit CAT Request (DB17, 0.4)
+                def read_cat_request_bit():
+                    try:
+                        data = plc_client.db_read(DB_NUMBER, 0, 1)
+                        byte0 = data[0]
+                        return (byte0 & 0x10) != 0  # 0x10 = 00010000b, bit 4
+                    except Exception as e:
+                        write_log("ERROR", f"Error al leer CAT Request: {e}")
+                        return False
+
+                cat_request = read_cat_request_bit()
+
+                # Leer el CAT_NUMBER del PLC (DB17, offset 184, STRING[32])
+                def read_cat_number_from_plc():
+                    try:
+                        data = plc_client.db_read(DB_NUMBER, 184, 34)
+                        # snap7.util.get_string espera (data, start, size)
+                        import snap7.util
+                        return snap7.util.get_string(data, 2, 32).strip('\x00')
+                    except Exception as e:
+                        write_log("ERROR", f"Error al leer CAT_NUMBER del PLC: {e}")
+                        return ""
+
+                # Guardar en el CSV según el valor de CAT Request
                 try:
                     current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     file_exists = os.path.exists(PRODUCT_LOG_FILE_PATH)
@@ -425,8 +644,12 @@ def plc_monitoring_loop_logic():
                     with open(PRODUCT_LOG_FILE_PATH, "a", newline='', encoding="utf-8") as f:
                         writer = csv.writer(f)
                         if not file_exists:
-                            writer.writerow(["Fecha", "ID_Producto", "Altura_mm", "Serial_Number"])
-                        writer.writerow([current_timestamp, product_id_value, f"{product_height_value:.2f}", serial_number_value])
+                            writer.writerow(["Fecha", "ID_Producto", "Altura_mm", "Serial_Number", "CAT_NUMBER"] if cat_request else ["Fecha", "ID_Producto", "Altura_mm", "Serial_Number"])
+                        if cat_request:
+                            cat_number_plc = read_cat_number_from_plc()
+                            writer.writerow([current_timestamp, product_id_value, f"{product_height_value:.2f}", serial_number_value, cat_number_plc])
+                        else:
+                            writer.writerow([current_timestamp, product_id_value, f"{product_height_value:.2f}", serial_number_value])
                 except Exception as e:
                     write_log("ERROR", f"Error al escribir Product_Log.csv: {e}")
 
@@ -511,6 +734,9 @@ def attempt_machine_login(parent_root, registro_var, password_var, entry_registr
         logged_in_datetime_global   = datetime.now()
         write_log("LOGIN", f"'{logged_in_user_name_global}' ({logged_in_laser_code_global}) ha iniciado sesión.")
 
+        # Escribir Log_Status = 1 en PLC
+        set_log_status_in_plc(True)
+
         try:
             os.makedirs(os.path.dirname(LASER_CODE_FILE_PATH), exist_ok=True)
             with open(LASER_CODE_FILE_PATH, "w", newline='', encoding="utf-8") as f:
@@ -523,10 +749,198 @@ def attempt_machine_login(parent_root, registro_var, password_var, entry_registr
 
         show_logged_in_screen(parent_root, logged_in_user_name_global, logged_in_laser_code_global)
     else:
+        # Escribir Log_Status = 0 en PLC si login falla
+        set_log_status_in_plc(False)
         messagebox.showerror("Error de Acceso", "Número de registro o contraseña incorrectos.", parent=parent_root)
         registro_var.set(""); password_var.set(""); entry_registro_login.focus_set()
+# ========================== CIERRE DE SESIÓN ==============================
+def logout_machine_user():
+    global login_successful_machine, logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global
+    login_successful_machine = False
+    logged_in_user_name_global = None
+    logged_in_laser_code_global = None
+    logged_in_datetime_global = None
+    # Escribir Log_Status = 0 en PLC
+    set_log_status_in_plc(False)
+    write_log("LOGOUT", "Usuario ha cerrado sesión.")
+    # Aquí puedes agregar lógica para volver a la pantalla de login si lo deseas
 
 # ================================ MENÚS / UI ================================
+def show_serial_authorization_window():
+    """Ventana de autorización para reestablecer número serial"""
+    auth_window = tk.Toplevel(root_machine_app)
+    auth_window.title("Autorización Requerida")
+    auth_window.geometry("380x250")
+    auth_window.configure(bg=COLOR_BACKGROUND_PRIMARY)
+    auth_window.resizable(False, False)
+    auth_window.grab_set()  # Modal
+
+    # Centrar la ventana
+    auth_window.update_idletasks()
+    x = root_machine_app.winfo_x() + (root_machine_app.winfo_width() // 2) - (auth_window.winfo_width() // 2)
+    y = root_machine_app.winfo_y() + (root_machine_app.winfo_height() // 2) - (auth_window.winfo_height() // 2)
+    auth_window.geometry(f"+{x}+{y}")
+
+    # Frame principal
+    main_frame = tk.Frame(auth_window, bg=COLOR_BACKGROUND_SECONDARY, bd=2, relief="raised")
+    main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+    # Título
+    tk.Label(main_frame, text="Acceso Autorizado Requerido", 
+             font=FONT_SECTION_HEADER, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE).pack(pady=(10, 10))
+
+    # Frame para entrada
+    input_frame = tk.Frame(main_frame, bg=COLOR_BACKGROUND_SECONDARY)
+    input_frame.pack(pady=0, fill="x", padx=20)
+
+    tk.Label(input_frame, text="Usuario:", font=FONT_LABEL, 
+             bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).pack(anchor="w", pady=(5,2))
+    
+    user_var = tk.StringVar()
+    entry_user = tk.Entry(input_frame, textvariable=user_var, font=FONT_ENTRY,
+                         bg=COLOR_BACKGROUND_TERTIARY, fg=COLOR_TEXT_PRIMARY, insertbackground=COLOR_TEXT_PRIMARY)
+    entry_user.pack(fill="x", pady=(0,10))
+    entry_user.focus_set()
+
+    tk.Label(input_frame, text="Contraseña:", font=FONT_LABEL, 
+             bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).pack(anchor="w", pady=(0,2))
+    
+    pass_var = tk.StringVar()
+    entry_pass = tk.Entry(input_frame, textvariable=pass_var, font=FONT_ENTRY, show="*",
+                         bg=COLOR_BACKGROUND_TERTIARY, fg=COLOR_TEXT_PRIMARY, insertbackground=COLOR_TEXT_PRIMARY)
+    entry_pass.pack(fill="x", pady=(0,10))
+
+    def authorize_access():
+        username = user_var.get().strip()
+        password = pass_var.get().strip()
+        
+        if not username or not password:
+            messagebox.showwarning("Campos Vacíos", "Por favor ingresa usuario y contraseña.", parent=auth_window)
+            return
+        
+        # Verificar credenciales específicas para reestablecer serial
+        if username == "ADMIN" and password == "PASSWORD":
+            write_log("AUTH", f"Acceso autorizado para reestablecer serial - Usuario: {username}")
+            auth_window.destroy()
+            show_serial_initialization_window()
+        else:
+            write_log("AUTH", f"Intento de acceso fallido para reestablecer serial - Usuario: {username}")
+            messagebox.showerror("Acceso Denegado", "Credenciales incorrectas.", parent=auth_window)
+            user_var.set("")
+            pass_var.set("")
+            entry_user.focus_set()
+
+    # Permitir Enter para autorizar
+    auth_window.bind('<Return>', lambda event: authorize_access())
+    # Permitir Escape para cerrar
+    auth_window.bind('<Escape>', lambda event: auth_window.destroy())
+
+def show_serial_initialization_window():
+    """Ventana para reestablecer número serial"""
+    serial_window = tk.Toplevel(root_machine_app)
+    serial_window.title("Reestablecer Número Serial")
+    serial_window.geometry("400x200")
+    serial_window.configure(bg=COLOR_BACKGROUND_PRIMARY)
+    serial_window.resizable(False, False)
+
+    # Centrar la ventana
+    serial_window.update_idletasks()
+    x = root_machine_app.winfo_x() + (root_machine_app.winfo_width() // 2) - (serial_window.winfo_width() // 2)
+    y = root_machine_app.winfo_y() + (root_machine_app.winfo_height() // 2) - (serial_window.winfo_height() // 2)
+    serial_window.geometry(f"+{x}+{y}")
+
+    # Frame principal
+    main_frame = tk.Frame(serial_window, bg=COLOR_BACKGROUND_SECONDARY, bd=2, relief="raised")
+    main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+
+    # Título
+    tk.Label(main_frame, text="Reestablecer Número Serial", 
+             font=FONT_SECTION_HEADER, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE).pack(pady=(10, 20))
+
+    # Frame para entrada
+    input_frame = tk.Frame(main_frame, bg=COLOR_BACKGROUND_SECONDARY)
+    input_frame.pack(pady=0)
+
+    tk.Label(input_frame, text="Número serial a reestablecer (6 dígitos)", 
+             font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).pack(pady=1)
+    
+    serial_var = tk.StringVar()
+    entry_serial = tk.Entry(input_frame, textvariable=serial_var, font=FONT_ENTRY, width=30,
+                           bg=COLOR_BACKGROUND_TERTIARY, fg=COLOR_TEXT_PRIMARY, insertbackground=COLOR_TEXT_PRIMARY)
+    entry_serial.pack(pady=1)
+    entry_serial.focus_set()
+
+    def initialize_serial():
+        serial_number = serial_var.get().strip()
+        if not serial_number:
+            messagebox.showwarning("Campo Vacío", "Por favor ingresa un número serial.", parent=serial_window)
+            return
+        
+        # Validar que sean exactamente 6 dígitos
+        if not serial_number.isdigit():
+            messagebox.showerror("Formato Inválido", "El número serial debe contener solo dígitos.", parent=serial_window)
+            return
+        
+        if len(serial_number) != 6:
+            messagebox.showerror("Formato Inválido", "El número serial debe ser de exactamente 6 dígitos.\n\nFormato válido: 000001 - 999999", parent=serial_window)
+            return
+        
+        # Validar rango (000001 a 999999)
+        serial_int = int(serial_number)
+        if serial_int < 1 or serial_int > 999999:
+            messagebox.showerror("Rango Inválido", "El número serial debe estar entre 000001 y 999999.", parent=serial_window)
+            return
+        
+        # Formatear a 6 dígitos con ceros a la izquierda
+        formatted_serial = f"{serial_int:06d}"
+        
+        # Confirmación del usuario
+        result = messagebox.askyesno("Confirmar", 
+                                   f"¿Deseas reestablecer el número serial?\n\nSerial: {formatted_serial}\n\nEsto escribirá el serial al PLC y lo guardará en el registro.", 
+                                   parent=serial_window)
+        if result:
+            # Escribir al PLC
+            plc_success, plc_message = write_serial_to_plc(formatted_serial)
+            
+            # Guardar en CSV
+            csv_success, csv_message = save_serial_to_csv(formatted_serial)
+            
+            # Registrar en logs
+            write_log("SERIAL", f"Número serial reestablecido: {formatted_serial}")
+            
+            # Mostrar resultados
+            if plc_success and csv_success:
+                messagebox.showinfo("Éxito Completo", 
+                                   f"Número serial {formatted_serial} reestablecido correctamente.\n\n" +
+                                   f"✓ {plc_message}\n✓ {csv_message}", 
+                                   parent=serial_window)
+                write_log("SERIAL", f"Serial {formatted_serial} - PLC: OK, CSV: OK")
+            else:
+                error_messages = []
+                if not plc_success:
+                    error_messages.append(f"❌ PLC: {plc_message}")
+                    write_log("ERROR", f"Serial {formatted_serial} - PLC falló: {plc_message}")
+                else:
+                    error_messages.append(f"✓ PLC: {plc_message}")
+                
+                if not csv_success:
+                    error_messages.append(f"❌ CSV: {csv_message}")
+                    write_log("ERROR", f"Serial {formatted_serial} - CSV falló: {csv_message}")
+                else:
+                    error_messages.append(f"✓ CSV: {csv_message}")
+                
+                messagebox.showwarning("Reestablecimiento Parcial", 
+                                     f"Número serial {formatted_serial} procesado con algunos errores:\n\n" +
+                                     "\n".join(error_messages), 
+                                     parent=serial_window)
+            
+            serial_window.destroy()
+
+    # Permitir Enter para inicializar
+    serial_window.bind('<Return>', lambda event: initialize_serial())
+    # Permitir Escape para cerrar
+    serial_window.bind('<Escape>', lambda event: serial_window.destroy())
+
 def show_logs_window():
     log_window = tk.Toplevel(root_machine_app)
     log_window.title("Historial de Registros")
@@ -686,8 +1100,8 @@ def show_user_manual():
     )
     messagebox.showinfo("Manual de Usuario", manual_text, parent=root_machine_app)
 
-def create_menu_bar(parent_root, enable_download_menu=False, enable_logs_menu=False):
-    global download_menu_instance, logs_menu_instance
+def create_menu_bar(parent_root, enable_download_menu=False, enable_logs_menu=False, enable_serial_menu=False):
+    global download_menu_instance, logs_menu_instance, serial_menu_instance
 
     menubar = tk.Menu(parent_root, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY,
                       activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
@@ -719,6 +1133,14 @@ def create_menu_bar(parent_root, enable_download_menu=False, enable_logs_menu=Fa
     logs_menu_instance = logs_menu
     logs_menu_instance.entryconfig("Ver Historial de Registros", state="normal" if enable_logs_menu else "disabled")
 
+    # Menú Serial
+    serial_menu = tk.Menu(menubar, tearoff=0, bg=COLOR_SUBMENU_BACKGROUND, fg=COLOR_SUBMENU_FOREGROUND,
+                         activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
+    menubar.add_cascade(label="Serial", menu=serial_menu)
+    serial_menu.add_command(label="Reestablecer número serial", command=show_serial_authorization_window)
+    serial_menu_instance = serial_menu
+    serial_menu_instance.entryconfig("Reestablecer número serial", state="normal" if enable_serial_menu else "disabled")
+
     help_menu = tk.Menu(menubar, tearoff=0, bg=COLOR_SUBMENU_BACKGROUND, fg=COLOR_SUBMENU_FOREGROUND,
                         activebackground=COLOR_ACCENT_BLUE, activeforeground=COLOR_BACKGROUND_PRIMARY)
     menubar.add_cascade(label="Ayuda", menu=help_menu)
@@ -742,7 +1164,7 @@ def show_logged_in_screen(parent_root, user_name, laser_code):
     for w in root_machine_app.winfo_children():
         w.destroy()
 
-    create_menu_bar(root_machine_app, enable_download_menu=True, enable_logs_menu=True)
+    create_menu_bar(root_machine_app, enable_download_menu=True, enable_logs_menu=True, enable_serial_menu=True)
 
     root_machine_app.update_idletasks()
     x = root_machine_app.winfo_screenwidth() // 2 - root_machine_app.winfo_width() // 2
@@ -891,6 +1313,9 @@ def logout(parent_root):
     global product_id_var, product_counter_var, product_read_time_display_var, product_height_var
     global measurement2_var, measurement3_var, measurement4_var, additional_info1_var, additional_info2_var, serial_number_var
 
+    # Escribir Log_Status = 0 en PLC al registrar salida
+    logout_machine_user()
+
     if os.path.exists(LASER_CODE_FILE_PATH):
         try: os.remove(LASER_CODE_FILE_PATH)
         except Exception as e:
@@ -933,7 +1358,7 @@ def show_initial_screen(parent_root):
     parent_root.resizable(True, True)
     parent_root.configure(bg=COLOR_BACKGROUND_PRIMARY)
 
-    create_menu_bar(parent_root, enable_download_menu=False, enable_logs_menu=False)
+    create_menu_bar(parent_root, enable_download_menu=False, enable_logs_menu=False, enable_serial_menu=False)
 
     parent_root.update_idletasks()
     x = parent_root.winfo_screenwidth() // 2 - parent_root.winfo_width() // 2
@@ -1017,6 +1442,7 @@ def show_initial_screen(parent_root):
 
     registro_entrada_frame.grid_columnconfigure(0, weight=1)
     registro_entrada_frame.grid_columnconfigure(1, weight=2)
+    registro_entrada_frame.grid_columnconfigure(2, weight=0, minsize=30)
 
     tk.Label(registro_entrada_frame, text="Número de Registro:", font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=5, padx=5)
     entry_registro_login = tk.Entry(registro_entrada_frame, textvariable=registro_var, font=FONT_ENTRY, bd=1, relief="solid",
@@ -1029,6 +1455,16 @@ def show_initial_screen(parent_root):
                                     bg=COLOR_BACKGROUND_TERTIARY, fg=COLOR_TEXT_PRIMARY, insertbackground=COLOR_TEXT_PRIMARY,
                                     highlightbackground=COLOR_BORDER_SUBTLE, highlightcolor=COLOR_FOCUS_BORDER, highlightthickness=1, show="*")
     entry_password_login.grid(row=1, column=1, sticky="ew", pady=5, padx=5)
+
+    # Botón invisible para autollenado rápido (dev bypass)
+    def dev_autofill(event=None):
+        registro_var.set("10195")
+        password_var.set("AT195")
+        attempt_machine_login(parent_root, registro_var, password_var, entry_registro_login)
+
+    invisible_btn = tk.Frame(registro_entrada_frame, width=20, height=20, bg=COLOR_BACKGROUND_TERTIARY, highlightthickness=0, bd=0)
+    invisible_btn.grid(row=1, column=2, sticky="e", padx=5)
+    invisible_btn.bind("<Button-3>", dev_autofill)  # Clic derecho
 
     button_frame_bottom = tk.Frame(main_content_frame, bg=COLOR_BACKGROUND_PRIMARY)
     button_frame_bottom.pack(pady=(10, 20), fill="x", expand=True)
@@ -1055,7 +1491,7 @@ def on_main_window_close():
     if logged_in_user_name_global:
         write_log("APP_EXIT", f"Aplicación cerrada con usuario '{logged_in_user_name_global}' loggeado.")
     else:
-        write_log("APP_EXIT", "Aplicación cerrada (usuario no loggeado o sesión terminada).")
+        write_log("APP_EXIT", "Aplicación cerrada (usuario no loggeado).")
 
     try: _hb_write(0)  # forzar 0 al salir
     except: pass

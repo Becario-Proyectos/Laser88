@@ -844,6 +844,12 @@ def registrar_datos_partes():
     if not numero_parte:
         messagebox.showwarning("Campo vacío", "Por favor ingresa el número de parte.")
         return
+    
+    # Validar que Numero_parte tenga sólo entre 6 y 7 caracteres
+    if not (6 <= len(numero_parte) <= 7):
+        messagebox.showwarning("Entrada no válida", "El número de parte debe tener entre 6 y 7 caracteres.")
+        return
+
     if not numero_cat:
         messagebox.showwarning("Campo vacío", "Por favor ingresa el número CAT.")
         return
@@ -1171,6 +1177,7 @@ def show_parts_registration_screen():
 
     tk.Label(input_frame_parts, text="Número de Parte:", bg=COLOR_SECONDARY, fg=COLOR_TEXT_DARK, font=FONT_LABELS)\
         .grid(row=1, column=0, pady=10, padx=15, sticky="w")
+    
     entry_numero_parte = tk.Entry(input_frame_parts, font=FONT_ENTRY, width=40, bd=2, relief="sunken")
     entry_numero_parte.grid(row=1, column=1, pady=10, padx=15, sticky="ew")
 
@@ -1229,12 +1236,12 @@ def show_parts_registration_screen():
 def dar_de_baja_parte():
     safe_backup(NOMBRE_ARCHIVO_PARTES)
 
-    numero_cat_a_borrar = tk.simpledialog.askstring("Baja de Parte", "Ingrese el número CAT a dar de baja", parent=parts_window)
-    if numero_cat_a_borrar is None:
+    numero_parte_a_borrar = tk.simpledialog.askstring("Baja de Parte", "Ingrese el número de parte a dar de baja", parent=parts_window)
+    if numero_parte_a_borrar is None:
         return
-    numero_cat_a_borrar = numero_cat_a_borrar.strip()
-    if not numero_cat_a_borrar:
-        messagebox.showwarning("Entrada inválida", "Debes ingresar un número CAT válido.", parent=parts_window)
+    numero_parte_a_borrar = numero_parte_a_borrar.strip()
+    if not numero_parte_a_borrar:
+        messagebox.showwarning("Entrada inválida", "Debes ingresar un número de parte válido.", parent=parts_window)
         return
 
     # Buscar la línea a eliminar en el TXT cifrado principal
@@ -1245,7 +1252,8 @@ def dar_de_baja_parte():
         if linea.startswith("ERROR:") or not linea.strip():
             continue
         partes = linea.split(",")
-        if len(partes) >= 4 and partes[3].strip() == numero_cat_a_borrar:
+        # partes[2] es Numero_Parte
+        if len(partes) >= 3 and partes[2].strip() == numero_parte_a_borrar:
             eliminado_txt = linea
             continue  # No agregar a nuevos_registros
         nuevos_registros.append(linea)
@@ -1259,14 +1267,14 @@ def dar_de_baja_parte():
             if linea.startswith("ERROR:") or not linea.strip():
                 continue
             partes = linea.split(",")
-            if len(partes) >= 4 and partes[3].strip() == numero_cat_a_borrar:
+            if len(partes) >= 3 and partes[2].strip() == numero_parte_a_borrar:
                 eliminado_txt = linea
                 encontrado_en_pendiente = True
                 continue  # No agregar a nuevos_registros_pendientes
             nuevos_registros_pendientes.append(linea)
         if encontrado_en_pendiente:
             # Confirmar antes de eliminar
-            confirmar = messagebox.askyesno("Confirmar eliminación", f"¿Deseas dar de baja el número CAT {numero_cat_a_borrar}?", parent=parts_window)
+            confirmar = messagebox.askyesno("Confirmar eliminación", f"¿Deseas dar de baja el número de parte {numero_parte_a_borrar}?", parent=parts_window)
             if not confirmar:
                 return
             # Sobrescribir el archivo de pendientes sin el registro dado de baja
@@ -1274,14 +1282,14 @@ def dar_de_baja_parte():
             # Guardar la baja en pendientes de bajas de partes
             if eliminado_txt:
                 guardar_registro_cifrado(eliminado_txt, NOMBRE_ARCHIVO_BAJAS_PARTES_PENDIENTES)
-                messagebox.showinfo("Éxito", f"El número CAT {numero_cat_a_borrar} fue dado de baja.", parent=parts_window)
+                messagebox.showinfo("Éxito", f"El número de parte {numero_parte_a_borrar} fue dado de baja.", parent=parts_window)
             else:
-                messagebox.showerror("Error", "No se encontró el número CAT a dar de baja.", parent=parts_window)
+                messagebox.showerror("Error", "No se encontró el número de parte a dar de baja.", parent=parts_window)
             return
 
     # Si se encontró en el principal
     if eliminado_txt:
-        confirmar = messagebox.askyesno("Confirmar eliminación", f"¿Deseas dar de baja el número CAT {numero_cat_a_borrar}?", parent=parts_window)
+        confirmar = messagebox.askyesno("Confirmar eliminación", f"¿Deseas dar de baja el número de parte {numero_parte_a_borrar}?", parent=parts_window)
         if not confirmar:
             return
         # Registrar baja en log TXT
@@ -1306,29 +1314,29 @@ def dar_de_baja_parte():
                 database=DB_NAME
             )
             mycursor = mydb.cursor()
-            mycursor.execute(f"SELECT fecha_registro, hora_registro, Numero_Parte, Numero_CAT FROM {TABLE_NAME_PARTES} WHERE Numero_CAT = %s", (numero_cat_a_borrar,))
+            mycursor.execute(f"SELECT fecha_registro, hora_registro, Numero_Parte, Numero_CAT FROM {TABLE_NAME_PARTES} WHERE Numero_Parte = %s", (numero_parte_a_borrar,))
             row = mycursor.fetchone()
             if row:
-                confirmar = messagebox.askyesno("Confirmar eliminación", f"El número CAT {numero_cat_a_borrar} solo existe en MySQL. ¿Deseas darlo de baja?", parent=parts_window)
+                confirmar = messagebox.askyesno("Confirmar eliminación", f"El número de parte {numero_parte_a_borrar} solo existe en MySQL. ¿Deseas darlo de baja?", parent=parts_window)
                 if not confirmar:
                     mycursor.close()
                     mydb.close()
                     return
                 # Eliminar de MySQL
-                mycursor.execute(f"DELETE FROM {TABLE_NAME_PARTES} WHERE Numero_CAT = %s", (numero_cat_a_borrar,))
+                mycursor.execute(f"DELETE FROM {TABLE_NAME_PARTES} WHERE Numero_Parte = %s", (numero_parte_a_borrar,))
                 mydb.commit()
                 mycursor.close()
                 mydb.close()
                 # Sincronizar TXT desde MySQL
                 sync_txt_from_mysql_partes()
-                messagebox.showinfo("Éxito", f"Se dio de baja correctamente el número CAT {numero_cat_a_borrar} (solo en MySQL).", parent=parts_window)
+                messagebox.showinfo("Éxito", f"Se dio de baja correctamente el número de parte {numero_parte_a_borrar} (solo en MySQL).", parent=parts_window)
                 return
             else:
                 mycursor.close()
                 mydb.close()
         except Exception:
             pass
-        messagebox.showerror("Error", "No se encontró el número CAT a dar de baja.", parent=parts_window)
+        messagebox.showerror("Error", "No se encontró el número de parte a dar de baja.", parent=parts_window)
         return
 
     # Intentar eliminar en MySQL
@@ -1340,7 +1348,7 @@ def dar_de_baja_parte():
             database=DB_NAME
         )
         mycursor = mydb.cursor()
-        mycursor.execute(f"DELETE FROM {TABLE_NAME_PARTES} WHERE Numero_CAT = %s", (numero_cat_a_borrar,))
+        mycursor.execute(f"DELETE FROM {TABLE_NAME_PARTES} WHERE Numero_Parte = %s", (numero_parte_a_borrar,))
         mydb.commit()
         if mycursor.rowcount > 0:
             # Éxito en MySQL, eliminar del TXT
@@ -1353,7 +1361,7 @@ def dar_de_baja_parte():
                     os.remove(NOMBRE_ARCHIVO_PARTES)
                 except Exception:
                     pass
-            messagebox.showinfo("Éxito", f"Se dio de baja correctamente el número CAT {numero_cat_a_borrar}.", parent=parts_window)
+            messagebox.showinfo("Éxito", f"Se dio de baja correctamente el número de parte {numero_parte_a_borrar}.", parent=parts_window)
             mycursor.close()
             mydb.close()
             return
@@ -1362,12 +1370,12 @@ def dar_de_baja_parte():
             mydb.close()
             # Si no se eliminó en MySQL, guardar baja pendiente
             guardar_registro_cifrado(eliminado_txt, NOMBRE_ARCHIVO_BAJAS_PARTES_PENDIENTES)
-            messagebox.showinfo("Pendiente", f"No se encontró el número CAT {numero_cat_a_borrar} en MySQL. La baja se guardó como pendiente y se sincronizará cuando haya conexión.", parent=parts_window)
+            messagebox.showinfo("Pendiente", f"No se encontró el número de parte {numero_parte_a_borrar} en MySQL. La baja se guardó como pendiente y se sincronizará cuando haya conexión.", parent=parts_window)
             return
     except Exception:
         # Si hay error de conexión, guardar baja pendiente
         guardar_registro_cifrado(eliminado_txt, NOMBRE_ARCHIVO_BAJAS_PARTES_PENDIENTES)
-        messagebox.showinfo("Éxito", f"Se dio de baja correctamente el número CAT {numero_cat_a_borrar}.", parent=parts_window)
+        messagebox.showinfo("Éxito", f"Se dio de baja correctamente el número de parte {numero_parte_a_borrar}.", parent=parts_window)
         return
 
 # -----------------------------------------MOSTRAR DB SCREEN (PERSONAL) -----------------
@@ -1445,7 +1453,7 @@ def show_database_screen():
         # Zebra Style robusto
         style = ttk.Style()
         style.map("Treeview", background=[('selected', "#0261B9")])
-        style.configure("OddRow.Treeview", background="#82C0FF", foreground=COLOR_TEXT_LIGHT)
+        style.configure("OddRow.Treeview", background="#DFEBFF", foreground=COLOR_TEXT_DARK)
         style.configure("EvenRow.Treeview", background="#FFFFFF", foreground=COLOR_TEXT_DARK)
 
         conn_mysql = None
@@ -1527,14 +1535,12 @@ def show_database_screen():
                 iid = tree_mysql.insert("", "end", values=row, tags=(tag,))
                 # Forzar color directo (workaround)
                 tree_mysql.item(iid, tags=(tag,))
-            tree_mysql.tag_configure("OddRow", background="#DFEBFF", foreground=COLOR_TEXT_LIGHT)
+            tree_mysql.tag_configure("OddRow", background="#DFEBFF", foreground=COLOR_TEXT_DARK)
             tree_mysql.tag_configure("EvenRow", background="#FFFFFF", foreground=COLOR_TEXT_DARK)
             # Forzar el estilo ttk.Style
             for idx, iid in enumerate(tree_mysql.get_children()):
                 tag = "OddRow" if idx % 2 == 0 else "EvenRow"
                 tree_mysql.item(iid, tags=(tag,))
-
-    # No ajustar anchos aquí: los anchos fijos se definen solo una vez arriba
 
     # --- Búsqueda y eventos ---
     def do_search(event=None):
@@ -1670,7 +1676,7 @@ def show_parts_database_screen():
         # Zebra Style igual que personal
         style = ttk.Style()
         style.map("Treeview", background=[('selected', "#0261B9")])
-        style.configure("OddRow.Treeview", background="#82C0FF", foreground=COLOR_TEXT_LIGHT)
+        style.configure("OddRow.Treeview", background="#DFEBFF", foreground=COLOR_TEXT_LIGHT)
         style.configure("EvenRow.Treeview", background="#FFFFFF", foreground=COLOR_TEXT_DARK)
 
         conn_mysql = None
@@ -1741,7 +1747,7 @@ def show_parts_database_screen():
                 tag = "OddRow" if idx % 2 == 0 else "EvenRow"
                 iid = tree_mysql.insert("", "end", values=row, tags=(tag,))
                 tree_mysql.item(iid, tags=(tag,))
-            tree_mysql.tag_configure("OddRow", background="#DFEBFF", foreground=COLOR_TEXT_LIGHT)
+            tree_mysql.tag_configure("OddRow", background="#DFEBFF", foreground=COLOR_TEXT_DARK)
             tree_mysql.tag_configure("EvenRow", background="#FFFFFF", foreground=COLOR_TEXT_DARK)
             for idx, iid in enumerate(tree_mysql.get_children()):
                 tag = "OddRow" if idx % 2 == 0 else "EvenRow"
