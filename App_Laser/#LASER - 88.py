@@ -24,7 +24,7 @@ NOMBRE_ARCHIVO_BAJAS_PENDIENTES = "C:/VCST/Aplicaciones/DB_Bajas_pendiente.txt"
 NOMBRE_ARCHIVO_LOGS     = "C:/VCST/Aplicaciones/App_Laser/Logs/App_Logs.csv"
 LASER_CODE_FILE_PATH    = "C:/VCST/Aplicaciones/App_Laser/active_laser_code.csv"
 PRODUCT_LOG_FILE_PATH   = "C:/VCST/Aplicaciones/App_Laser/App_Logs/Product_Log.csv"
-SERIAL_NUMBER_LOG_PATH  = "C:/VCST/Aplicaciones/App_Laser/App_Logs/Serial_Numbers.csv"
+SERIAL_NUMBER_LOG_PATH  = "C:/VCST/Aplicaciones/App_Laser/App_Logs/Serial_Numbers.csv"  # ARCHIVO CIFRADO
 CLAVE_PATH              = "C:/VCST/Aplicaciones/clave2.key"       
 
 # ============================= PLC CONFIG ==================================
@@ -103,6 +103,7 @@ plc_status_label_widget = None
 
 product_id_var = None
 product_counter_var = None
+product_nok_counter_var = None
 product_read_time_display_var = None
 product_height_var = None
 
@@ -116,6 +117,7 @@ serial_number_var = None
 logged_in_user_name_global = None
 logged_in_laser_code_global = None
 logged_in_datetime_global = None
+logged_in_user_number_global = None  # Agregar número de usuario
 
 download_menu_instance = None
 logs_menu_instance = None
@@ -370,6 +372,104 @@ def check_credentials(numero_registro_input, password_input):
     result = check_credentials_from_txt_encrypted(numero_registro_input, password_input)
     return result
 
+# ============================== OBTENER NÚMERO DE OPERADOR ==============================
+def get_operator_number_from_mysql(nombre_operador):
+    """Busca el número de operador en MySQL usando el nombre"""
+    conn = _mysql_get_conn()
+    if not conn:
+        return None
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT Numero FROM registered_personnel WHERE Nombre=%s",
+            (nombre_operador,)
+        )
+        row = cur.fetchone()
+        cur.close(); conn.close()
+        if row:
+            return str(row[0])
+        return None
+    except Exception as e:
+        write_log("ERROR", f"Error obteniendo número de operador desde MySQL: {e}")
+        try:
+            cur.close(); conn.close()
+        except:
+            pass
+        return None
+
+def get_operator_number_from_txt(nombre_operador):
+    """Busca el número de operador en TXT cifrado usando el nombre"""
+    # Buscar en archivo principal
+    registros_principales = leer_registros_descifrados(NOMBRE_ARCHIVO_REGISTROS)
+    for line in registros_principales:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(',')
+        
+        # localizar el índice del número (entero) porque el nombre puede tener comas
+        num_index = -1
+        for i in range(2, len(parts)):
+            if parts[i].strip().isdigit():
+                num_index = i
+                break
+        if num_index == -1:
+            continue
+            
+        nombre = ",".join(parts[1:num_index]).strip()
+        numero = parts[num_index].strip()
+        
+        if nombre == nombre_operador:
+            return numero
+    
+    # Si no se encontró en principal, buscar en pendientes
+    registros_pendientes = leer_registros_descifrados(NOMBRE_ARCHIVO_REGISTROS_PENDIENTES)
+    for line in registros_pendientes:
+        line = line.strip()
+        if not line:
+            continue
+        parts = line.split(',')
+        
+        # localizar el índice del número (entero) porque el nombre puede tener comas
+        num_index = -1
+        for i in range(2, len(parts)):
+            if parts[i].strip().isdigit():
+                num_index = i
+                break
+        if num_index == -1:
+            continue
+            
+        nombre = ",".join(parts[1:num_index]).strip()
+        numero = parts[num_index].strip()
+        
+        if nombre == nombre_operador:
+            return numero
+    
+    return None
+
+def get_operator_number():
+    """
+    Obtiene el número del operador loggeado.
+    Primero intenta obtenerlo del login guardado, luego de MySQL, luego de TXT
+    """
+    # Si ya tenemos el número del login, usarlo
+    if logged_in_user_number_global:
+        return logged_in_user_number_global
+    
+    # Si no tenemos número pero sí nombre, buscarlo
+    if logged_in_user_name_global:
+        # Intentar MySQL primero
+        numero = get_operator_number_from_mysql(logged_in_user_name_global)
+        if numero:
+            return numero
+        
+        # Si MySQL no funciona, buscar en TXT
+        numero = get_operator_number_from_txt(logged_in_user_name_global)
+        if numero:
+            return numero
+    
+    return "N/A"
+
 # ============================== PLC / HEARTBEAT =============================
 def connect_to_plc():
     global plc_client
@@ -446,28 +546,66 @@ def write_serial_to_plc(serial_number):
 
 def save_serial_to_csv(serial_number):
     """
-    Guarda únicamente el número serial en un archivo CSV dedicado, sobreescribiendo el anterior
+    Guarda únicamente el número serial en un archivo CSV cifrado, sobreescribiendo el anterior
     """
     try:
         # Crear directorio si no existe
         os.makedirs(os.path.dirname(SERIAL_NUMBER_LOG_PATH), exist_ok=True)
         
-        # Usar modo "w" para sobreescribir el archivo completo
-        with open(SERIAL_NUMBER_LOG_PATH, "w", newline='', encoding="utf-8") as f:
-            writer = csv.writer(f)
-            # Solo escribir el número serial actual, sobreescribiendo cualquier contenido anterior
-            writer.writerow([serial_number])
+        # Obtener la clave de cifrado
+        key = load_key()
+        if not key:
+            return False, "Error: No se pudo cargar la clave de cifrado para el serial"
         
-        return True, f"Serial guardado en: {SERIAL_NUMBER_LOG_PATH}"
+        # Inicializar Fernet
+        fernet = Fernet(key)
+        
+        # Crear el contenido del CSV como string
+        csv_content = f"{serial_number}"
+        
+        # Cifrar el contenido
+        encrypted_content = fernet.encrypt(csv_content.encode("utf-8"))
+        
+        # Escribir el contenido cifrado al archivo (modo binario)
+        with open(SERIAL_NUMBER_LOG_PATH, "wb") as f:
+            f.write(encrypted_content)
+        
+        return True, f"Serial cifrado guardado en: {SERIAL_NUMBER_LOG_PATH}"
         
     except Exception as e:
-        return False, f"Error al guardar serial en CSV: {e}"
+        return False, f"Error al guardar serial cifrado: {e}"
+
+def read_serial_from_csv():
+    try:
+        # Verificar si el archivo existe
+        if not os.path.exists(SERIAL_NUMBER_LOG_PATH):
+            return None, "Archivo de serial no encontrado"
+        
+        # Obtener la clave de cifrado
+        key = load_key()
+        if not key:
+            return None, "Error: No se pudo cargar la clave de cifrado para leer el serial"
+        
+        # Inicializar Fernet
+        fernet = Fernet(key)
+        
+        # Leer el contenido cifrado
+        with open(SERIAL_NUMBER_LOG_PATH, "rb") as f:
+            encrypted_content = f.read()
+        
+        # Descifrar el contenido
+        decrypted_content = fernet.decrypt(encrypted_content).decode("utf-8")
+        
+        return decrypted_content.strip(), "Serial leído correctamente"
+        
+    except Exception as e:
+        return None, f"Error al leer serial cifrado: {e}"
 
 # ===================== ACTUALIZACIÓN GUI (desde el hilo) ====================
-def update_gui_plc_status(is_connected, plc_internal_status_byte, product_id_value, product_counter_value, product_height_value,
+def update_gui_plc_status(is_connected, plc_internal_status_byte, product_id_value, product_counter_value, product_nok_counter_value, product_height_value,
                           meas2_value, meas3_value, meas4_value, add_info1_value, add_info2_value, serial_number_value):
     global plc_status_text_var, plc_connection_indicator_canvas, plc_connection_indicator_oval_id, plc_last_update_label_var, plc_error_label_widget, plc_status_label_widget
-    global product_id_var, product_counter_var, product_read_time_display_var, product_height_var, last_product_time
+    global product_id_var, product_counter_var, product_nok_counter_var, product_read_time_display_var, product_height_var, last_product_time
     global measurement2_var, measurement3_var, measurement4_var, additional_info1_var, additional_info2_var, serial_number_var
 
     if not (plc_status_text_var and plc_connection_indicator_canvas and plc_connection_indicator_oval_id and
@@ -504,12 +642,13 @@ def update_gui_plc_status(is_connected, plc_internal_status_byte, product_id_val
     plc_status_label_widget.config(fg=text_color)
     plc_connection_indicator_canvas.itemconfig(plc_connection_indicator_oval_id, fill=light_color, outline=light_color)
 
-    if (product_id_var is not None and product_counter_var is not None and
+    if (product_id_var is not None and product_counter_var is not None and product_nok_counter_var is not None and
         product_read_time_display_var is not None and product_height_var is not None and
         serial_number_var is not None):
 
-        product_id_var.set(f"Producto: {product_id_value}")
-        product_counter_var.set(f"Contador de productos: {product_counter_value}")
+        product_id_var.set(f"Número de parte: {product_id_value}")
+        product_counter_var.set(f"Contador de piezas OK: {product_counter_value}")
+        product_nok_counter_var.set(f"Contador de piezas NOK: {product_nok_counter_value}")
         product_height_var.set(f"Altura: {product_height_value:.2f} mm" if isinstance(product_height_value, (int, float)) else "Altura: N/A")
         serial_number_var.set(f"Número Serial: {serial_number_value}")
 
@@ -524,9 +663,9 @@ def update_gui_plc_status(is_connected, plc_internal_status_byte, product_id_val
         measurement4_var is not None and additional_info1_var is not None and
         additional_info2_var is not None):
 
-        measurement2_var.set(f" {meas2_value:.2f} mm" if isinstance(meas2_value, (int, float)) else f"Measurement 2: {meas2_value}")
-        measurement3_var.set(f" {meas3_value:.2f} mm" if isinstance(meas3_value, (int, float)) else f"Measurement 3: {meas3_value}")
-        measurement4_var.set(f" {meas4_value:.2f} mm" if isinstance(meas4_value, (int, float)) else f"Measurement 4: {meas4_value}")
+        measurement2_var.set(f" {meas2_value:.2f} mm" if isinstance(meas2_value, (int, float)) else f"Medición 2: {meas2_value}")
+        measurement3_var.set(f" {meas3_value:.2f} mm" if isinstance(meas3_value, (int, float)) else f"Medición 3: {meas3_value}")
+        measurement4_var.set(f" {meas4_value:.2f} mm" if isinstance(meas4_value, (int, float)) else f"Medición 4: {meas4_value}")
         additional_info1_var.set(f" {add_info1_value}")
         additional_info2_var.set(f" {add_info2_value}")
 
@@ -536,8 +675,15 @@ def plc_monitoring_loop_logic():
 
     plc_is_connected = False
     plc_connected_byte_value = -1
+
+    global plc_client, last_read_product_counter, last_product_time
+    global last_laser_mark_done_state
+
+    plc_is_connected = False
+    plc_connected_byte_value = -1
     product_id_value = "N/A"
     product_counter_value = "N/A"
+    product_nok_counter_value = "N/A"
     product_height_value = "N/A"
     meas2_value = "N/A"
     meas3_value = "N/A"
@@ -565,18 +711,23 @@ def plc_monitoring_loop_logic():
             meas3_value              = snap7.util.get_real(data, 134)
             meas4_value              = snap7.util.get_real(data, 138)
             current_product_counter  = snap7.util.get_dint(data, 142)
+            current_nok_counter      = snap7.util.get_dint(data, 146)
             serial_number_value      = snap7.util.get_string(data, 150).strip('\x00')
             add_info1_value          = snap7.util.get_string(data, 218).strip('\x00')
             add_info2_value          = snap7.util.get_string(data, 252).strip('\x00')
-    
 
+            # Leer el bit Laser Mark Done (DB17, 0.1)
+            laser_mark_done = (data[0] & 0x02) != 0  # 0x02 = 00000010b, bit 1
 
-            # Log de producto cuando cambia el contador
-            if last_read_product_counter is None or current_product_counter != last_read_product_counter:
+            # Inicializar estado anterior si no existe
+            if 'last_laser_mark_done_state' not in globals():
+                last_laser_mark_done_state = False
+
+            # Flanco de subida: de 0 a 1
+            if not last_laser_mark_done_state and laser_mark_done:
                 last_product_time = datetime.now()
-                last_read_product_counter = current_product_counter
 
-                # --- NUEVO: Buscar y escribir CAT_NUMBER al PLC antes de leerlo ---
+                # --- Buscar y escribir CAT_NUMBER al PLC antes de leerlo ---
                 def buscar_cat_number(numero_parte):
                     # 1. Buscar en MySQL
                     try:
@@ -629,8 +780,8 @@ def plc_monitoring_loop_logic():
                 # Leer el bit CAT Request (DB17, 0.4)
                 def read_cat_request_bit():
                     try:
-                        data = plc_client.db_read(DB_NUMBER, 0, 1)
-                        byte0 = data[0]
+                        data_bit = plc_client.db_read(DB_NUMBER, 0, 1)
+                        byte0 = data_bit[0]
                         return (byte0 & 0x10) != 0  # 0x10 = 00010000b, bit 4
                     except Exception as e:
                         write_log("ERROR", f"Error al leer CAT Request: {e}")
@@ -641,38 +792,49 @@ def plc_monitoring_loop_logic():
                 # Leer el CAT_NUMBER del PLC (DB17, offset 184, STRING[32])
                 def read_cat_number_from_plc():
                     try:
-                        data = plc_client.db_read(DB_NUMBER, 184, 34)
+                        data_cat = plc_client.db_read(DB_NUMBER, 184, 34)
                         # snap7.util.get_string espera (data, start, size)
-                        import snap7.util
-                        return snap7.util.get_string(data, 2, 32).strip('\x00')
+                        return snap7.util.get_string(data_cat, 2, 32).strip('\x00')
                     except Exception as e:
                         write_log("ERROR", f"Error al leer CAT_NUMBER del PLC: {e}")
                         return ""
 
                 # Guardar en el CSV según el valor de CAT Request
                 try:
-                    current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    # Separar fecha y hora
+                    current_datetime = datetime.now()
+                    current_date = current_datetime.strftime("%Y-%m-%d")
+                    current_time = current_datetime.strftime("%H:%M:%S")
+                    
+                    # Obtener número del operador
+                    operator_number = get_operator_number()
+                    
                     file_exists = os.path.exists(PRODUCT_LOG_FILE_PATH)
                     os.makedirs(os.path.dirname(PRODUCT_LOG_FILE_PATH), exist_ok=True)
                     with open(PRODUCT_LOG_FILE_PATH, "a", newline='', encoding="utf-8") as f:
                         writer = csv.writer(f)
                         if not file_exists:
-                            writer.writerow(["Fecha", "ID_Producto", "Altura_mm", "Serial_Number", "CAT_NUMBER"] if cat_request else ["Fecha", "ID_Producto", "Altura_mm", "Serial_Number"])
+                            if cat_request:
+                                writer.writerow(["Fecha", "Hora", "Operador", "Número_Parte", "Altura_mm", "Número_Serial", "Piezas_OK", "Piezas_NOK", "CAT_Number"])
+                            else:
+                                writer.writerow(["Fecha", "Hora", "Operador", "Número_Parte", "Altura_mm", "Número_Serial", "Piezas_OK", "Piezas_NOK"])
                         if cat_request:
                             cat_number_plc = read_cat_number_from_plc()
-                            writer.writerow([current_timestamp, product_id_value, f"{product_height_value:.2f}", serial_number_value, cat_number_plc])
+                            writer.writerow([current_date, current_time, operator_number, product_id_value, f"{product_height_value:.2f}", serial_number_value, current_product_counter, current_nok_counter, cat_number_plc])
                         else:
-                            writer.writerow([current_timestamp, product_id_value, f"{product_height_value:.2f}", serial_number_value])
+                            writer.writerow([current_date, current_time, operator_number, product_id_value, f"{product_height_value:.2f}", serial_number_value, current_product_counter, current_nok_counter])
                 except Exception as e:
                     write_log("ERROR", f"Error al escribir Product_Log.csv: {e}")
 
+            # Actualizar estado anterior
+            last_laser_mark_done_state = laser_mark_done
+
+            # El contador de productos solo se actualiza para mostrarlo
             product_counter_value = current_product_counter
+            product_nok_counter_value = current_nok_counter
 
             # --- FIN DEL CICLO: dejar 0 ---
             heartbeat_end_of_cycle()
-
-            # DEBUG opcional
-            # print(f"DEBUG: HB ciclo 1->0, PLC_Byte4={plc_connected_byte_value}, Serial='{serial_number_value}'")
 
         except Exception as e:
             print(f"DEBUG HILO: Error PLC (DB{DB_NUMBER}): {e}")
@@ -682,6 +844,7 @@ def plc_monitoring_loop_logic():
             plc_connected_byte_value = -1
             product_id_value = "ERROR"
             product_counter_value = "ERROR"
+            product_nok_counter_value = "ERROR"
             product_height_value = "ERROR"
             meas2_value = "ERROR"
             meas3_value = "ERROR"
@@ -692,19 +855,19 @@ def plc_monitoring_loop_logic():
             plc_is_connected = False
             disconnect_from_plc()
 
-    return (plc_is_connected, plc_connected_byte_value, product_id_value, product_counter_value, product_height_value,
+    return (plc_is_connected, plc_connected_byte_value, product_id_value, product_counter_value, product_nok_counter_value, product_height_value,
             meas2_value, meas3_value, meas4_value, add_info1_value, add_info2_value, serial_number_value)
 
 def plc_monitoring_thread_runner():
     while not stop_monitoring_event.is_set():
         values = plc_monitoring_loop_logic()
-        (plc_is_connected, plc_internal_status_byte_from_plc, product_id_value, product_counter_value, product_height_value,
+        (plc_is_connected, plc_internal_status_byte_from_plc, product_id_value, product_counter_value, product_nok_counter_value, product_height_value,
          meas2_value, meas3_value, meas4_value, add_info1_value, add_info2_value, serial_number_value) = values
 
         if root_machine_app and root_machine_app.winfo_exists():
             try:
                 root_machine_app.after(0, lambda: update_gui_plc_status(
-                    plc_is_connected, plc_internal_status_byte_from_plc, product_id_value, product_counter_value, product_height_value,
+                    plc_is_connected, plc_internal_status_byte_from_plc, product_id_value, product_counter_value, product_nok_counter_value, product_height_value,
                     meas2_value, meas3_value, meas4_value, add_info1_value, add_info2_value, serial_number_value
                 ))
             except tk.TclError:
@@ -731,7 +894,7 @@ def stop_monitoring_thread():
 
 # ============================= AUTENTICACIÓN GUI ============================
 def attempt_machine_login(parent_root, registro_var, password_var, entry_registro_login):
-    global login_successful_machine, logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global
+    global login_successful_machine, logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global, logged_in_user_number_global
     numero_registro = registro_var.get().strip()
     password = password_var.get().strip()
 
@@ -744,6 +907,7 @@ def attempt_machine_login(parent_root, registro_var, password_var, entry_registr
         login_successful_machine = True
         logged_in_user_name_global  = user_data[0]
         logged_in_laser_code_global = user_data[1]
+        logged_in_user_number_global = numero_registro  # Guardar número de usuario
         logged_in_datetime_global   = datetime.now()
         write_log("LOGIN", f"'{logged_in_user_name_global}' ({logged_in_laser_code_global}) ha iniciado sesión.")
 
@@ -768,10 +932,11 @@ def attempt_machine_login(parent_root, registro_var, password_var, entry_registr
         registro_var.set(""); password_var.set(""); entry_registro_login.focus_set()
 # ========================== CIERRE DE SESIÓN ==============================
 def logout_machine_user():
-    global login_successful_machine, logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global
+    global login_successful_machine, logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global, logged_in_user_number_global
     login_successful_machine = False
     logged_in_user_name_global = None
     logged_in_laser_code_global = None
+    logged_in_user_number_global = None
     logged_in_datetime_global = None
     # Escribir Log_Status = 0 en PLC
     set_log_status_in_plc(False)
@@ -909,10 +1074,18 @@ def show_serial_initialization_window():
         # Formatear a 6 dígitos con ceros a la izquierda
         formatted_serial = f"{serial_int:06d}"
         
+        # Mostrar el serial actual antes de confirmar (solo para administradores)
+        try:
+            current_serial, read_message = read_serial_from_csv()
+            if current_serial:
+                confirmation_text = f"¿Deseas reestablecer el número serial?\n\nSerial actual: {current_serial}\nNuevo serial: {formatted_serial}\n\nEsto escribirá el serial al PLC y lo guardará cifrado en el registro."
+            else:
+                confirmation_text = f"¿Deseas reestablecer el número serial?\n\nSerial: {formatted_serial}\n\nEsto escribirá el serial al PLC y lo guardará cifrado en el registro."
+        except:
+            confirmation_text = f"¿Deseas reestablecer el número serial?\n\nSerial: {formatted_serial}\n\nEsto escribirá el serial al PLC y lo guardará cifrado en el registro."
+        
         # Confirmación del usuario
-        result = messagebox.askyesno("Confirmar", 
-                                   f"¿Deseas reestablecer el número serial?\n\nSerial: {formatted_serial}\n\nEsto escribirá el serial al PLC y lo guardará en el registro.", 
-                                   parent=serial_window)
+        result = messagebox.askyesno("Confirmar", confirmation_text, parent=serial_window)
         if result:
             # Escribir al PLC
             plc_success, plc_message = write_serial_to_plc(formatted_serial)
@@ -1022,10 +1195,10 @@ def save_current_data_to_file():
         hours, minutes = divmod(minutes, 60)
         time_since_disconnection_str = f"{hours:02}h {minutes:02}m {seconds:02}s"
 
-    product_id = product_id_var.get().replace("Producto: ", "") if product_id_var else 'N/A'
-    product_counter = product_counter_var.get().replace("Contador de productos: ", "") if product_counter_var else 'N/A'
+    product_id = product_id_var.get().replace("Número de Parte: ", "") if product_id_var else 'N/A'
+    product_counter = product_counter_var.get().replace("Contador de Piezas OK: ", "") if product_counter_var else 'N/A'
     product_height = product_height_var.get().replace("Altura: ", "").replace(" mm", "") if product_height_var else 'N/A'
-    product_read_time = product_read_time_display_var.get().replace("Tiempo: ", "") if product_read_time_display_var else 'N/A'
+    product_read_time = product_read_time_display_var.get().replace("Tiempo desde la última pieza: ", "") if product_read_time_display_var else 'N/A'
     serial_number = (serial_number_var.get()
                      .replace("Número Serial: ", "")
                      .replace("Número Serial : ", "")
@@ -1079,19 +1252,19 @@ def save_current_data_to_file():
             data_to_save.append(f"Última Actualización del PLC: {plc_last_update}")
             data_to_save.append(f"Tiempo desde Desconexión PLC: {time_since_disconnection_str}")
             data_to_save.append(f"---------------------------------------------")
-            data_to_save.append(f"Datos del Producto:")
-            data_to_save.append(f"  Producto: {product_id}")
-            data_to_save.append(f"  Contador de productos: {product_counter}")
+            data_to_save.append(f"Datos del Número de Parte:")
+            data_to_save.append(f"  Número de Parte: {product_id}")
+            data_to_save.append(f"  Contador de Piezas OK: {product_counter}")
             data_to_save.append(f"  Altura: {product_height} mm")
-            data_to_save.append(f"  Tiempo desde último producto: {product_read_time}")
-            data_to_save.append(f"  Serial Number: {serial_number}")
+            data_to_save.append(f"  Tiempo desde la última pieza: {product_read_time}") 
+            data_to_save.append(f"  Número Serial: {serial_number}")                    
             data_to_save.append(f"---------------------------------------------")
             data_to_save.append(f"Otros Datos de Medición y Adicionales (Pestaña Lectura PLC):")
-            data_to_save.append(f"  Measurement 2: {meas2} mm")
-            data_to_save.append(f"  Measurement 3: {meas3} mm")
-            data_to_save.append(f"  Measurement 4: {meas4} mm")
-            data_to_save.append(f"  Additional Info 1: {add_info1}")
-            data_to_save.append(f"  Additional Info 2: {add_info2}")
+            data_to_save.append(f"  Medición 2: {meas2} mm")
+            data_to_save.append(f"  Medición 3: {meas3} mm")
+            data_to_save.append(f"  Medición 4: {meas4} mm")
+            data_to_save.append(f"  Información Adicional 1: {add_info1}")
+            data_to_save.append(f"  Información Adicional 2: {add_info2}")
             data_to_save.append(f"---------------------------------------------")
             with open(file_path, "w", encoding="utf-8") as file:
                 for line in data_to_save:
@@ -1168,7 +1341,7 @@ def create_menu_bar(parent_root, enable_download_menu=False, enable_logs_menu=Fa
 def show_logged_in_screen(parent_root, user_name, laser_code):
     global root_machine_app
     global plc_status_text_var, plc_connection_indicator_canvas, plc_connection_indicator_oval_id, plc_last_update_label_var, plc_error_label_widget, plc_status_label_widget
-    global product_id_var, product_counter_var, product_read_time_display_var, product_height_var
+    global product_id_var, product_counter_var, product_nok_counter_var, product_read_time_display_var, product_height_var
     global measurement2_var, measurement3_var, measurement4_var, additional_info1_var, additional_info2_var, serial_number_var
 
     root_machine_app = parent_root
@@ -1266,23 +1439,26 @@ def show_logged_in_screen(parent_root, user_name, laser_code):
     tab_overview.grid_columnconfigure(0, weight=1)
     tab_overview.grid_columnconfigure(1, weight=3)
 
-    global product_id_var, product_read_time_display_var, product_counter_var, product_height_var, serial_number_var
-    product_id_var = tk.StringVar(value="Producto: N/A")
+    global product_id_var, product_read_time_display_var, product_counter_var, product_nok_counter_var, product_height_var, serial_number_var
+    product_id_var = tk.StringVar(value="Número de Parte: N/A")
     product_read_time_display_var = tk.StringVar(value="Tiempo: 00:00")
-    product_counter_var = tk.StringVar(value="Contador de productos: 0")
+    product_counter_var = tk.StringVar(value="Contador de Piezas OK: 0")
+    product_nok_counter_var = tk.StringVar(value="Contador de Piezas NOK: 0")
     product_height_var = tk.StringVar(value="Altura: N/A")
     serial_number_var = tk.StringVar(value="Número Serial: N/A")
 
-    tk.Label(tab_overview, text="Producto:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Número de Parte:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, textvariable=product_id_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=0, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(tab_overview, text="Tiempo:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Tiempo desde la última pieza:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, textvariable=product_read_time_display_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=1, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(tab_overview, text="Contador de Productos:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Contador de Piezas OK:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, textvariable=product_counter_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=2, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(tab_overview, text="Altura:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=3, column=0, sticky="w", pady=2, padx=5)
-    tk.Label(tab_overview, textvariable=product_height_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=3, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(tab_overview, text="Número Serial:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=4, column=0, sticky="w", pady=2, padx=5)
-    tk.Label(tab_overview, textvariable=serial_number_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=4, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Contador de Piezas NOK:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=3, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, textvariable=product_nok_counter_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=3, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Altura:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=4, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, textvariable=product_height_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=4, column=1, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Número Serial:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=5, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, textvariable=serial_number_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=5, column=1, sticky="w", pady=2, padx=5)
 
     tab_plc_readings = tk.LabelFrame(notebook, text="", font=FONT_SECTION_HEADER,
                                      bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE, bd=1, relief="solid",
@@ -1326,7 +1502,7 @@ def show_logged_in_screen(parent_root, user_name, laser_code):
     btn_exit.grid(row=0, column=1, padx=10, pady=5, sticky="w")
 
 def logout(parent_root):
-    global login_successful_machine, logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global
+    global login_successful_machine, logged_in_user_name_global, logged_in_laser_code_global, logged_in_datetime_global, logged_in_user_number_global
     global product_id_var, product_counter_var, product_read_time_display_var, product_height_var
     global measurement2_var, measurement3_var, measurement4_var, additional_info1_var, additional_info2_var, serial_number_var
 
@@ -1345,6 +1521,7 @@ def logout(parent_root):
     login_successful_machine = False
     logged_in_user_name_global = None
     logged_in_laser_code_global = None
+    logged_in_user_number_global = None
     logged_in_datetime_global = None
 
     product_id_var = None
@@ -1363,7 +1540,7 @@ def logout(parent_root):
 def show_initial_screen(parent_root):
     global login_successful_machine
     global plc_status_text_var, plc_connection_indicator_canvas, plc_connection_indicator_oval_id, plc_last_update_label_var, plc_error_label_widget, plc_status_label_widget
-    global product_id_var, product_counter_var, product_read_time_display_var, product_height_var, serial_number_var
+    global product_id_var, product_counter_var, product_nok_counter_var, product_read_time_display_var, product_height_var, serial_number_var
 
     login_successful_machine = False
 
@@ -1424,25 +1601,26 @@ def show_initial_screen(parent_root):
     plc_error_label_widget.grid(row=2, column=0, columnspan=2, pady=(10,5), padx=5, sticky="w")
     plc_error_label_widget.grid_remove()
 
-    # --- ÚLTIMO PRODUCTO ---
-    product_data_frame = tk.LabelFrame(main_content_frame, text="ÚLTIMO PRODUCTO MARCADO", font=FONT_SECTION_HEADER,
+    # --- ÚLTIMO PRODUCTO // NÚMERO DE PARTE ---
+    product_data_frame = tk.LabelFrame(main_content_frame, text="ÚLTIMA PIEZA MARCADA", font=FONT_SECTION_HEADER,
                                        bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_ACCENT_BLUE, bd=1, relief="solid",
                                        highlightbackground=COLOR_BORDER_SUBTLE, highlightthickness=1, padx=20, pady=15)
     product_data_frame.pack(pady=(0, 25), fill="x")
     product_data_frame.grid_columnconfigure(0, weight=1)
     product_data_frame.grid_columnconfigure(1, weight=3)
 
-    product_id_var = tk.StringVar(value="Producto: N/A")
+    product_id_var = tk.StringVar(value="Número de Parte: N/A")
     product_read_time_display_var = tk.StringVar(value="Tiempo: 00:00")
-    product_counter_var = tk.StringVar(value="Contador de productos: 0")
+    product_counter_var = tk.StringVar(value="Contador de Piezas OK: 0")
+    product_nok_counter_var = tk.StringVar(value="Contador de Piezas NOK: 0")
     product_height_var = tk.StringVar(value="Altura: N/A")
     serial_number_var = tk.StringVar(value="Número Serial: N/A")
 
-    tk.Label(product_data_frame, text="Producto:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, text="Número de Parte:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=0, column=0, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, textvariable=product_id_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=0, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(product_data_frame, text="Tiempo:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, text="Tiempo desde la última pieza:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, textvariable=product_read_time_display_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=1, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(product_data_frame, text="Contador de Productos:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, text="Contador de Piezas OK:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, textvariable=product_counter_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=2, column=1, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, text="Altura:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=3, column=0, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, textvariable=product_height_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=3, column=1, sticky="w", pady=2, padx=5)
