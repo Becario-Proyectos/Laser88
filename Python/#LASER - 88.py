@@ -25,15 +25,13 @@ NOMBRE_ARCHIVO_LOGS     = "C:/VCST/2888/Logs/RegistroLogs/Register_Logs.csv"
 NOMBRE_ARCHIVO_LOGS_ERRORES = "C:/VCST/2888/Logs/ErrorLogs/Error_Logs.csv"
 
 LASER_CODE_FILE_PATH    = "C:/VCST/2888/LaserCode/active_laser_code.csv"
-
-PRODUCT_LOG_FILE_PATH   = "C:/VCST/2888/Data/Products/Product_Log.csv"  #Hacer uno diario
+PRODUCT_LOG_FILE_PATH   = "C:/VCST/2888/Data/Products/Product_Log.csv"  #Hace uno diario¿
 
 SERIAL_NUMBER_LOG_PATH  = "C:/VCST/2888/LaserCode/Serial_Numbers.csv" 
-
 CLAVE_PATH              = "C:/VCST/2888/Data/Key/clave2.key"       
 
 # ============================= PLC CONFIG ==================================
-PLC_IP = '192.168.50.20'
+PLC_IP = '192.168.50.20'  #La de la laser es 192.168.21.20
 RACK = 0
 SLOT = 1
 DB_NUMBER = 17
@@ -76,7 +74,7 @@ FONT_STATUS_INFO     = ("Consolas", 18, "bold")
 FONT_STATUS_ERROR    = ("Consolas", 18, "bold")
 
 # ============================= ICONO PERSONALIZADO ==============================
-ICONO_PATH = os.path.expanduser(r"~/Downloads/logo_dragon2.png") #No es definitivo
+ICONO_PATH = r"C:/VCST/Aplicaciones/2888/Icon/icono_dragon.ico"  # Ruta definitiva
 
 def set_custom_icon(window):
     try:
