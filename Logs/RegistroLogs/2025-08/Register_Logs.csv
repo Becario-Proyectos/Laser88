@@ -1,0 +1,12 @@
+2025-08-26 14:34:01,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-26 14:34:17,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-26 14:36:31,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-26 14:36:31,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
+2025-08-26 14:36:31,WARNING,No se pudo conectar a MySQL para crear tabla de producción
+2025-08-26 14:37:07,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-26 14:37:57,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-26 14:46:43,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-26 14:49:20,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-26 15:01:15,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-26 15:03:40,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-26 15:04:05,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.

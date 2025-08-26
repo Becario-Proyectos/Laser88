@@ -1,0 +1,2 @@
+2025-08-26,PruebaFinal,1213,TT,TT - Baja sincronizada con MySQL
+2025-08-26,TestFinal,1312,RR,RR - Eliminado de TXT y MySQL
