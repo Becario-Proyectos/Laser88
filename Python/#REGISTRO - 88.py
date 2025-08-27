@@ -13,19 +13,19 @@ import threading
 import time
 
 # ============================== RUTAS DE ARCHIVOS ==============================
-NOMBRE_ARCHIVO_REGISTROS = "C:/VCST/2888/Data/RegistroPersonal/DB_Registro.txt"
-NOMBRE_ARCHIVO_PARTES = "C:/VCST/2888/Data/RegistroPartes/DB_Partes.txt"
+NOMBRE_ARCHIVO_REGISTROS = "C:/VCST/2888/Registros/RegistroPersonal/DB_Registro.txt"
+NOMBRE_ARCHIVO_PARTES = "C:/VCST/2888/Registros/RegistroPartes/DB_Partes.txt"
 
-NOMBRE_ARCHIVO_BAJAS = "C:/VCST/2888/Data/RegistroBajasPersonal/DB_BajasStaff.txt"
+NOMBRE_ARCHIVO_BAJAS = "C:/VCST/2888/Registros/RegistroBajasPersonal/DB_BajasStaff.txt"
 
-NOMBRE_ARCHIVO_REGISTROS_PENDIENTES = "C:/VCST/2888/Data/Pendientes/DB_Registro_pendiente.txt"
-NOMBRE_ARCHIVO_PARTES_PENDIENTES = "C:/VCST/2888/Data/Pendientes/DB_Partes_pendiente.txt"
+NOMBRE_ARCHIVO_REGISTROS_PENDIENTES = "C:/VCST/2888/Registros/Pendientes/DB_Registro_pendiente.txt"
+NOMBRE_ARCHIVO_PARTES_PENDIENTES = "C:/VCST/2888/Registros/Pendientes/DB_Partes_pendiente.txt"
 
-NOMBRE_ARCHIVO_BAJAS_PENDIENTES = "C:/VCST/2888/Data/Pendientes/DB_Bajas_pendiente.txt"
-NOMBRE_ARCHIVO_BAJAS_PARTES_PENDIENTES = "C:/VCST/2888/Data/Pendientes/DB_Bajas_partes_pendiente.txt"
-NOMBRE_ARCHIVO_BAJAS_PARTES_LOG = "C:/VCST/2888/Data/RegistroBajasPartes/DB_BajasPartes.txt"
+NOMBRE_ARCHIVO_BAJAS_PENDIENTES = "C:/VCST/2888/Registros/Pendientes/DB_Bajas_pendiente.txt"
+NOMBRE_ARCHIVO_BAJAS_PARTES_PENDIENTES = "C:/VCST/2888/Registros/Pendientes/DB_Bajas_partes_pendiente.txt"
+NOMBRE_ARCHIVO_BAJAS_PARTES_LOG = "C:/VCST/2888/Registros/RegistroBajasPartes/DB_BajasPartes.txt"
 
-CLAVE_PATH = "C:/VCST/2888/Data/Key/clave2.key"
+CLAVE_PATH = "C:/VCST/2888/Registros/Key/clave2.key"
 
 # ============================ RUTA DE LA IMAGEN  ==============================
 IMAGE_LOGO_PATH = "C:/VCST/2888/Icon/logo_dragon.png"

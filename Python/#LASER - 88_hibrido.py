@@ -15,26 +15,23 @@ from cryptography.fernet import Fernet
 import mysql.connector
 
 # ============================= RUTAS / ARCHIVOS =============================
-NOMBRE_ARCHIVO_REGISTROS = "C:/VCST/2888/Registros/RegistroPersonal/DB_Registro.txt" 
-NOMBRE_ARCHIVO_PARTES   = "C:/VCST/2888/Registros/RegistroPartes/DB_Partes.txt"
+NOMBRE_ARCHIVO_REGISTROS = "C:/VCST/2888/Data/RegistroPersonal/DB_Registro.txt" 
+NOMBRE_ARCHIVO_PARTES   = "C:/VCST/2888/Data/RegistroPartes/DB_Partes.txt"
 
-NOMBRE_ARCHIVO_REGISTROS_PENDIENTES = "C:/VCST/2888/Registros/Pendientes/DB_Registro_pendiente.txt"
-NOMBRE_ARCHIVO_BAJAS_PENDIENTES = "C:/VCST/2888/Registros/Pendientes/DB_Bajas_pendiente.txt"
+NOMBRE_ARCHIVO_REGISTROS_PENDIENTES = "C:/VCST/2888/Data/Pendientes/DB_Registro_pendiente.txt"
+NOMBRE_ARCHIVO_BAJAS_PENDIENTES = "C:/VCST/2888/Data/Pendientes/DB_Bajas_pendiente.txt"
 
 NOMBRE_ARCHIVO_LOGS     = "C:/VCST/2888/Logs/RegistroLogs/Register_Logs.csv"
 NOMBRE_ARCHIVO_LOGS_ERRORES = "C:/VCST/2888/Logs/ErrorLogs/Error_Logs.csv"
 
 LASER_CODE_FILE_PATH    = "C:/VCST/2888/Laser/active_laser_code.csv"
-PRODUCT_CSV_BASE_PATH   = "C:/VCST/Aplicaciones/2888/Data"
+PRODUCT_LOG_FILE_PATH   = "C:/VCST/2888/Data/Products/Product_Log.csv"  #Hace uno diario¿
 
 SERIAL_NUMBER_LOG_PATH  = "C:/VCST/2888/Laser/Serial_Numbers.csv" 
 
 #Serial Number sin Cifrar
 UNENCRYPTED_SERIAL_NUMBER_PATH = "C:/VCST/2888/Laser/Serial_Numbers_Unencrypted.csv"
 
-# CAT Number paths
-CAT_NUMBER_LOG_PATH = "C:/VCST/2888/Laser/CAT_Number.csv"
-UNENCRYPTED_CAT_NUMBER_PATH = "C:/VCST/2888/Laser/CAT_Number_Unencrypted.csv"
 CLAVE_PATH              = "C:/VCST/2888/Data/Key/clave2.key"       
 
 # ============================= PLC CONFIG ==================================
@@ -131,17 +128,13 @@ download_menu_instance = None
 logs_menu_instance = None
 serial_menu_instance = None
 
-# ============================= CONTADOR DIARIO DE PIEZAS =============================
-daily_piece_counter = 0
-current_day_for_counter = None
-
 # ============================= MySQL CONFIG / TABLAS =============================
 DB_HOST = "10.4.0.103"
 DB_USER = "wamp_user"
 DB_PASSWORD = "wamp"
 DB_NAME = "test"
 TABLE_USERS = "Registered_personnel"
-TABLE_TRACEABILITY_CATERPILLAR = "Traceability_Caterpillar"  
+TABLE_PRODUCTION_LOG = "production_log"  
 
 # ========================== LOG_STATUS EN PLC =============================
 def set_log_status_in_plc(value: bool):
@@ -252,32 +245,31 @@ def _mysql_init_schema():
     except Exception as e:
         write_log("ERROR", f"Init schema error: {e}")
 
-def _mysql_init_traceability_table():
+def _mysql_init_production_table():
     try:
         conn = _mysql_get_conn()
         if not conn:
-            write_log("WARNING", "No se pudo conectar a MySQL para crear tabla de trazabilidad")
+            write_log("WARNING", "No se pudo conectar a MySQL para crear tabla de producción")
             return False
         
         cur = conn.cursor()
         create_table_sql = f"""
-        CREATE TABLE IF NOT EXISTS {TABLE_TRACEABILITY_CATERPILLAR} (
+        CREATE TABLE IF NOT EXISTS {TABLE_PRODUCTION_LOG} (
             id INT AUTO_INCREMENT PRIMARY KEY,
             fecha DATE NOT NULL,
             hora TIME NOT NULL,
-            maquina VARCHAR(10) NOT NULL,
             operador VARCHAR(50),
             numero_parte VARCHAR(100),
-            numero_serial VARCHAR(50),
             altura_mm DECIMAL(10,2),
+            numero_serial VARCHAR(50),
+            piezas_ok INT,
+            piezas_nok INT,
             cat_number VARCHAR(100),
-            tiempo_entre_productos_seg INT DEFAULT NULL,
-            piezas_marcadas_dia INT DEFAULT NULL,
+            maquina VARCHAR(20),
             timestamp_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_fecha (fecha),
             INDEX idx_operador (operador),
-            INDEX idx_numero_parte (numero_parte),
-            INDEX idx_numero_serial (numero_serial)
+            INDEX idx_numero_parte (numero_parte)
         )
         """
         cur.execute(create_table_sql)
@@ -291,102 +283,31 @@ def _mysql_init_traceability_table():
             write_log("ERROR", f"Error cerrando conexión MySQL tras fallo en crear tabla: {e2}")
         return False
 
-def insert_traceability_data_to_mysql(fecha, hora, operador, numero_parte, numero_serial, altura_mm, cat_number, tiempo_entre_productos, piezas_dia):
+def insert_production_data_to_mysql(fecha, hora, operador, numero_parte, altura_mm, numero_serial, piezas_ok, piezas_nok, cat_number):
     try:
         conn = _mysql_get_conn()
         if not conn:
-            write_log("WARNING", "No se pudo conectar a MySQL para insertar datos de trazabilidad")
+            write_log("WARNING", "No se pudo conectar a MySQL para insertar datos de producción")
             return False
 
         cur = conn.cursor()
         insert_sql = f"""
-        INSERT INTO {TABLE_TRACEABILITY_CATERPILLAR} 
-        (fecha, hora, maquina, operador, numero_parte, numero_serial, altura_mm, cat_number, tiempo_entre_productos_seg, piezas_marcadas_dia)
+        INSERT INTO {TABLE_PRODUCTION_LOG} 
+        (fecha, hora, operador, numero_parte, altura_mm, numero_serial, piezas_ok, piezas_nok, cat_number, maquina)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
-        cur.execute(insert_sql, (fecha, hora, "2888", operador, numero_parte, numero_serial, altura_mm, cat_number, tiempo_entre_productos, piezas_dia))
+        cur.execute(insert_sql, (fecha, hora, operador, numero_parte, altura_mm, numero_serial, piezas_ok, piezas_nok, cat_number, "2888"))
         conn.commit()
         cur.close(); conn.close()
-        write_log("INFO", f"Datos de trazabilidad insertados en MySQL - Parte: {numero_parte}, Serial: {numero_serial}")
+        write_log("INFO", f"Datos de producción insertados en MySQL - Parte: {numero_parte}, Serial: {numero_serial}")
         return True
     except Exception as e:
-        write_log("ERROR", f"Error insertando datos de trazabilidad en MySQL: {e}")
+        write_log("ERROR", f"Error insertando datos de producción en MySQL: {e}")
         try:
             cur.close(); conn.close()
         except Exception as e2:
             write_log("ERROR", f"Error cerrando conexión MySQL tras fallo en insert: {e2}")
         return False
-
-def save_individual_product_csv(fecha, hora, operador, numero_parte, numero_serial, altura_mm, cat_number=""):
-    """
-    Guarda un archivo CSV individual por cada marcado en la nueva ruta:
-    C:/VCST/Aplicaciones/2888/Data/{YYYY-MM}/DD-MM-YYYY_HH-MM_{NumParte}.csv
-    
-    Contenido: Fecha, Hora, Maquina, Operador, Nparte, Nserial, Altura, CAT_number
-    """
-    try:
-        # Crear timestamp para el nombre del archivo
-        current_datetime = datetime.now()
-        year_month = current_datetime.strftime("%Y-%m")
-        
-        # Formato del nombre: DD-MM-YYYY_HH-MM_NumParte.csv
-        filename_timestamp = current_datetime.strftime("%d-%m-%Y_%H-%M")
-        filename = f"{filename_timestamp}_{numero_parte}.csv"
-        
-        # Carpeta por mes dentro de la nueva ruta base
-        month_dir = os.path.join(PRODUCT_CSV_BASE_PATH, year_month)
-        os.makedirs(month_dir, exist_ok=True)
-        
-        # Ruta completa del archivo
-        file_path = os.path.join(month_dir, filename)
-        
-        # Escribir CSV sin cifrar
-        with open(file_path, "w", newline='', encoding="utf-8") as f:
-            writer = csv.writer(f)
-            # Headers
-            writer.writerow(["Fecha", "Hora", "Maquina", "Operador", "Nparte", "Nserial", "Altura", "CAT_number"])
-            # Data
-            writer.writerow([fecha, hora, "2888", operador, numero_parte, numero_serial, f"{altura_mm:.2f}", cat_number])
-        
-        write_log("INFO", f"Archivo CSV individual creado: {filename}")
-        return True, f"CSV guardado: {filename}"
-        
-    except Exception as e:
-        write_log("ERROR", f"Error al crear archivo CSV individual: {e}")
-        return False, f"Error: {e}"
-
-def get_time_between_products():
-    """
-    Calcula el tiempo en segundos desde el último producto marcado.
-    Retorna None si es el primer producto del día/sesión.
-    """
-    global last_product_time
-    if last_product_time is None:
-        return None
-    
-    current_time = datetime.now()
-    time_diff = current_time - last_product_time
-    return int(time_diff.total_seconds())
-
-def update_daily_piece_counter():
-    """
-    Actualiza el contador diario de piezas. Se reinicia automáticamente cada día.
-    Retorna el número actual de piezas marcadas en el día.
-    """
-    global daily_piece_counter, current_day_for_counter
-    
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    
-    # Verificar si cambió el día (reiniciar contador)
-    if current_day_for_counter != current_date:
-        current_day_for_counter = current_date
-        daily_piece_counter = 0
-        write_log("INFO", f"Contador diario reiniciado para el día: {current_date}")
-    
-    # Incrementar contador
-    daily_piece_counter += 1
-    
-    return daily_piece_counter
 
 def check_credentials_from_mysql(numero_registro_input, password_input):
     conn = _mysql_get_conn()
@@ -461,6 +382,11 @@ def leer_registros_descifrados(archivo):
     return registros
 
 def check_user_in_pending_deletions(numero_registro_input):
+    """
+    Verifica si un usuario está en la lista de bajas pendientes.
+    Formato esperado tras descifrar: información_del_usuario_dado_de_baja
+    Retorna True si el usuario está en la lista de bajas (NO debe poder acceder)
+    """
     bajas_pendientes = leer_registros_descifrados(NOMBRE_ARCHIVO_BAJAS_PENDIENTES)
     for line in bajas_pendientes:
         line = line.strip()
@@ -703,23 +629,30 @@ def disconnect_from_plc():
         pass
 
 def initialize_plc_signals():
+    """Inicializa las señales del PLC al arrancar la aplicación"""
     try:
         # Asegurar que Log_Status esté en False al iniciar
         set_log_status_in_plc(False)
         
-        # Inicializar esquema y tabla de trazabilidad en MySQL
+        # Inicializar esquema y tabla de producción en MySQL
         _mysql_init_schema()
-        _mysql_init_traceability_table()
+        _mysql_init_production_table()
         
     except Exception as e:
         write_log("ERROR", f"Error inicializando señales PLC: {e}")
 
 def write_serial_to_plc(serial_number):
+    """
+    Escribe el número serial como STRING[32] en DB17.DBW150 (offset 150)
+    """
     global plc_client
     try:
         if not plc_client or not plc_client.get_connected():
             if not connect_to_plc():
                 return False, "No se pudo conectar al PLC"
+        
+        # Preparar el string para escritura - STRING[32] requiere longitud + datos
+        # Formato: byte de longitud + datos (máximo 32 caracteres)
         serial_str = str(serial_number)[:32]  # Truncar a 32 caracteres máximo
         
         # Crear bytearray para STRING[32]: 1 byte longitud + hasta 32 bytes datos + 1 byte reservado
@@ -738,7 +671,6 @@ def write_serial_to_plc(serial_number):
     except Exception as e:
         return False, f"Error al escribir serial al PLC: {e}"
     
-    #================== SERIAL NUMBER GUARDADO ======================
 
 def save_serial_to_csv(serial_number):
     try:
@@ -783,43 +715,6 @@ def read_serial_from_csv():
         
     except Exception as e:
         return None, f"Error al leer serial cifrado: {e}"
-
-    # ================== CAT NUMBER GUARDADO =================
-def save_cat_number(cat_number):
-    try:
-        os.makedirs(os.path.dirname(CAT_NUMBER_LOG_PATH), exist_ok=True)
-        key = load_key()
-        if not key:
-            return False, "Error: No se pudo cargar la clave de cifrado para el CAT_NUMBER"
-        fernet = Fernet(key)
-        encrypted_content = fernet.encrypt(str(cat_number).encode("utf-8"))
-        with open(CAT_NUMBER_LOG_PATH, "wb") as f:
-            f.write(encrypted_content)
-        # Guardar archivo sin cifrar solo para visualización
-        try:
-            with open(UNENCRYPTED_CAT_NUMBER_PATH, "w", encoding="utf-8", newline='') as f2:
-                f2.write(f"{cat_number}\n")
-        except Exception as e2:
-            write_log("ERROR", f"Error al escribir archivo de CAT_NUMBER sin cifrar (visual): {e2}")
-        return True, "CAT_NUMBER guardado correctamente"
-    except Exception as e:
-        return False, f"Error al guardar CAT_NUMBER: {e}"
-
-def read_cat_number():
-    try:
-        if not os.path.exists(CAT_NUMBER_LOG_PATH):
-            return None, "Archivo de CAT_NUMBER no encontrado"
-        key = load_key()
-        if not key:
-            return None, "Error: No se pudo cargar la clave de cifrado para leer el CAT_NUMBER"
-        fernet = Fernet(key)
-        with open(CAT_NUMBER_LOG_PATH, "rb") as f:
-            encrypted_content = f.read()
-        decrypted_content = fernet.decrypt(encrypted_content).decode("utf-8")
-        return decrypted_content.strip(), "CAT_NUMBER leído correctamente"
-    except Exception as e:
-        return None, f"Error al leer CAT_NUMBER cifrado: {e}"
-
 
 # ===================== ACTUALIZACIÓN GUI (desde el hilo) ====================
 def update_gui_plc_status(is_connected, plc_internal_status_byte, product_id_value, product_counter_value, product_nok_counter_value, product_height_value,
@@ -867,7 +762,7 @@ def update_gui_plc_status(is_connected, plc_internal_status_byte, product_id_val
         serial_number_var is not None):
 
         product_id_var.set(f"Número de parte: {product_id_value}")
-        product_counter_var.set(f"Piezas: {product_counter_value}")
+        product_counter_var.set(f"Piezas OK: {product_counter_value}")
         product_nok_counter_var.set(f"Piezas NOK: {product_nok_counter_value}")
         product_height_var.set(f"Altura: {product_height_value:.2f} mm" if isinstance(product_height_value, (int, float)) else "Altura: N/A")
         serial_number_var.set(f"Número Serial: {serial_number_value}")
@@ -1030,7 +925,7 @@ def plc_monitoring_loop_logic():
                         write_log("ERROR", f"Error al leer CAT_NUMBER del PLC: {e}")
                         return ""
 
-                # Guardar en CSV individual y MySQL según el valor de CAT Request
+                # Guardar en el CSV según el valor de CAT Request
                 try:
                     # Separar fecha y hora
                     current_datetime = datetime.now()
@@ -1040,56 +935,42 @@ def plc_monitoring_loop_logic():
                     # Obtener número del operador
                     operator_number = get_operator_number()
                     
-                    # Calcular tiempo entre productos (antes de actualizar last_product_time)
-                    tiempo_entre_productos = get_time_between_products()
-                    
-                    # Actualizar contador diario de piezas
-                    piezas_marcadas_dia = update_daily_piece_counter()
-                    
-                    # Determinar CAT_NUMBER según CAT Request
-                    if cat_request:
-                        cat_number_plc = read_cat_number_from_plc()
-                        current_cat_number = cat_number_plc  # Guardar para mostrar en GUI
-                        write_log("INFO", f"CAT_NUMBER leído para CSV: '{cat_number_plc}'")
-                        
-                        # Crear archivo CSV individual con CAT_NUMBER
-                        success, message = save_individual_product_csv(
-                            current_date, current_time, operator_number, product_id_value,
-                            serial_number_value, product_height_value, cat_number_plc
-                        )
-                        
-                        # Guardar en MySQL con CAT_NUMBER y nuevos campos
-                        insert_traceability_data_to_mysql(
-                            current_date, current_time, operator_number, product_id_value,
-                            serial_number_value, product_height_value, cat_number_plc, 
-                            tiempo_entre_productos, piezas_marcadas_dia
-                        )
-                    else:
-                        # CAT Request inactivo: crear CSV y MySQL sin CAT_NUMBER
-                        current_cat_number = ""  # Sin CAT_NUMBER para mostrar en GUI
-                        
-                        # Crear archivo CSV individual sin CAT_NUMBER
-                        success, message = save_individual_product_csv(
-                            current_date, current_time, operator_number, product_id_value,
-                            serial_number_value, product_height_value, ""
-                        )
-                        
-                        # Guardar en MySQL sin CAT_NUMBER pero con nuevos campos
-                        insert_traceability_data_to_mysql(
-                            current_date, current_time, operator_number, product_id_value,
-                            serial_number_value, product_height_value, "", 
-                            tiempo_entre_productos, piezas_marcadas_dia
-                        )
-                    
-                    if not success:
-                        write_log("ERROR", f"Error guardando CSV individual: {message}")
-                    else:
-                        # Log informativo sobre los nuevos datos calculados
-                        tiempo_info = f"{tiempo_entre_productos}s" if tiempo_entre_productos else "Primera pieza"
-                        write_log("INFO", f"Pieza marcada - Tiempo desde anterior: {tiempo_info}, Piezas del día: {piezas_marcadas_dia}")
-                        
+                    # Crear carpeta por mes y archivo por día
+                    year_month = current_datetime.strftime("%Y-%m")
+                    day = current_datetime.strftime("%d")
+                    product_log_dir = os.path.join(os.path.dirname(PRODUCT_LOG_FILE_PATH), year_month)
+                    os.makedirs(product_log_dir, exist_ok=True)
+                    product_log_file = os.path.join(product_log_dir, f"Product_Log_{current_datetime.strftime('%Y-%m-%d')}.csv")
+                    file_exists = os.path.exists(product_log_file)
+                    with open(product_log_file, "a", newline='', encoding="utf-8") as f:
+                        writer = csv.writer(f)
+                        # Headers unificados: siempre incluir CAT_Number y Máquina
+                        if not file_exists:
+                            writer.writerow(["Fecha", "Hora", "Operador", "Número_Parte", "Altura_mm", "Número_Serial", "Piezas_OK", "Piezas_NOK", "CAT_Number", "Máquina"])
+                        # Datos: llenar CAT_Number solo si CAT Request está activo
+                        if cat_request:
+                            cat_number_plc = read_cat_number_from_plc()
+                            current_cat_number = cat_number_plc  # Guardar para mostrar en GUI
+                            write_log("INFO", f"CAT_NUMBER leído para CSV: '{cat_number_plc}'")
+                            writer.writerow([current_date, current_time, operator_number, product_id_value, f"{product_height_value:.2f}", serial_number_value, current_product_counter, current_nok_counter, cat_number_plc, "2888"])
+                            # Guardar también en MySQL
+                            insert_production_data_to_mysql(
+                                current_date, current_time, operator_number, product_id_value, 
+                                product_height_value, serial_number_value, current_product_counter, 
+                                current_nok_counter, cat_number_plc
+                            )
+                        else:
+                            # CAT Request inactivo: dejar CAT_Number vacío
+                            current_cat_number = ""  # Sin CAT_NUMBER para mostrar en GUI
+                            writer.writerow([current_date, current_time, operator_number, product_id_value, f"{product_height_value:.2f}", serial_number_value, current_product_counter, current_nok_counter, "", "2888"])
+                            # Guardar también en MySQL (sin CAT_NUMBER)
+                            insert_production_data_to_mysql(
+                                current_date, current_time, operator_number, product_id_value, 
+                                product_height_value, serial_number_value, current_product_counter, 
+                                current_nok_counter, ""
+                            )
                 except Exception as e:
-                    write_log("ERROR", f"Error al procesar guardado de datos: {e}")
+                    write_log("ERROR", f"Error al escribir Product_Log.csv: {e}")
 
             # Actualizar estado anterior
             last_laser_mark_done_state = laser_mark_done
@@ -1496,7 +1377,7 @@ def save_current_data_to_file():
         time_since_disconnection_str = f"{hours:02}h {minutes:02}m {seconds:02}s"
 
     product_id = product_id_var.get().replace("Número de Parte: ", "") if product_id_var else 'N/A'
-    product_counter = product_counter_var.get().replace("Piezas: ", "") if product_counter_var else 'N/A'
+    product_counter = product_counter_var.get().replace("Piezas OK: ", "") if product_counter_var else 'N/A'
     product_height = product_height_var.get().replace("Altura: ", "").replace(" mm", "") if product_height_var else 'N/A'
     product_read_time = product_read_time_display_var.get().replace("Tiempo desde la última pieza: ", "") if product_read_time_display_var else 'N/A'
     serial_number = (serial_number_var.get()
@@ -1554,7 +1435,7 @@ def save_current_data_to_file():
             data_to_save.append(f"---------------------------------------------")
             data_to_save.append(f"Datos del Número de Parte:")
             data_to_save.append(f"  Número de Parte: {product_id}")
-            data_to_save.append(f"  Contador de Piezas: {product_counter}")
+            data_to_save.append(f"  Contador de Piezas OK: {product_counter}")
             data_to_save.append(f"  Altura: {product_height} mm")
             data_to_save.append(f"  Tiempo desde la última pieza: {product_read_time}") 
             data_to_save.append(f"  Número Serial: {serial_number}")                    
@@ -1746,7 +1627,7 @@ def show_logged_in_screen(parent_root, user_name, laser_code):
     global product_id_var, product_read_time_display_var, product_counter_var, product_nok_counter_var, product_height_var, serial_number_var
     product_id_var = tk.StringVar(value="Número de Parte: N/A")
     product_read_time_display_var = tk.StringVar(value="Tiempo: 00:00")
-    product_counter_var = tk.StringVar(value="Piezas: 0")
+    product_counter_var = tk.StringVar(value="Piezas OK: 0")
     product_nok_counter_var = tk.StringVar(value="Piezas NOK: 0")
     product_height_var = tk.StringVar(value="Altura: N/A")
     serial_number_var = tk.StringVar(value="Número Serial: N/A")
@@ -1755,11 +1636,11 @@ def show_logged_in_screen(parent_root, user_name, laser_code):
     tk.Label(tab_overview, textvariable=product_id_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=0, column=1, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, text="Tiempo desde la última pieza:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, textvariable=product_read_time_display_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=1, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(tab_overview, text="Contador de Piezas:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Contador de Piezas OK:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, textvariable=product_counter_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=2, column=1, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, text="Contador de Piezas NOK:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=3, column=0, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, textvariable=product_nok_counter_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=3, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(tab_overview, text="Medición de Altura:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=4, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(tab_overview, text="Altura:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=4, column=0, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, textvariable=product_height_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=4, column=1, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, text="Número Serial:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=5, column=0, sticky="w", pady=2, padx=5)
     tk.Label(tab_overview, textvariable=serial_number_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_LIGHT).grid(row=5, column=1, sticky="w", pady=2, padx=5)
@@ -1915,7 +1796,7 @@ def show_initial_screen(parent_root):
 
     product_id_var = tk.StringVar(value="Número de Parte: N/A")
     product_read_time_display_var = tk.StringVar(value="Tiempo: 00:00")
-    product_counter_var = tk.StringVar(value="Piezas: 0")
+    product_counter_var = tk.StringVar(value="Piezas OK: 0")
     product_nok_counter_var = tk.StringVar(value="Piezas NOK: 0")
     product_height_var = tk.StringVar(value="Altura: N/A")
     serial_number_var = tk.StringVar(value="Número Serial: N/A")
@@ -1924,9 +1805,9 @@ def show_initial_screen(parent_root):
     tk.Label(product_data_frame, textvariable=product_id_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=0, column=1, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, text="Tiempo desde la última pieza:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=1, column=0, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, textvariable=product_read_time_display_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=1, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(product_data_frame, text="Contador de Piezas:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, text="Contador de Piezas OK:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=2, column=0, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, textvariable=product_counter_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=2, column=1, sticky="w", pady=2, padx=5)
-    tk.Label(product_data_frame, text="Medición de Altura:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=3, column=0, sticky="w", pady=2, padx=5)
+    tk.Label(product_data_frame, text="Altura:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=3, column=0, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, textvariable=product_height_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=3, column=1, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, text="Número Serial:", font=FONT_LABEL_BOLD, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_MUTED).grid(row=4, column=0, sticky="w", pady=2, padx=5)
     tk.Label(product_data_frame, textvariable=serial_number_var, font=FONT_LABEL, bg=COLOR_BACKGROUND_SECONDARY, fg=COLOR_TEXT_PRIMARY).grid(row=4, column=1, sticky="w", pady=2, padx=5)
@@ -2004,7 +1885,7 @@ def on_main_window_close():
     sys.exit(0)
 
 # ================================ MAIN =====================================
-_mysql_init_schema()  # Asegurar que la base de datos y tablas existen
+_mysql_init_schema()  # crea BD si no existe (no truena si MySQL no responde)
 
 if __name__ == "__main__":
 
@@ -2016,7 +1897,7 @@ if __name__ == "__main__":
         os.path.dirname(NOMBRE_ARCHIVO_LOGS),
         os.path.dirname(NOMBRE_ARCHIVO_REGISTROS),
         os.path.dirname(LASER_CODE_FILE_PATH),
-        PRODUCT_CSV_BASE_PATH,
+        os.path.dirname(PRODUCT_LOG_FILE_PATH),
     ]:
         if d and not os.path.exists(d):
             os.makedirs(d, exist_ok=True)

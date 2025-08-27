@@ -15,3 +15,44 @@
 2025-08-26 16:03:47,APP_EXIT,Aplicación cerrada (usuario no loggeado).
 2025-08-26 16:05:47,APP_EXIT,Aplicación cerrada (usuario no loggeado).
 2025-08-26 16:09:28,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-26 16:20:22,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-26 16:25:21,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-26 16:26:15,LOGOUT,Usuario ha cerrado sesión.
+2025-08-26 16:26:21,LOGIN,'Luz María Olmos Ramírez' (LO) ha iniciado sesión.
+2025-08-26 16:26:51,APP_EXIT,Aplicación cerrada con usuario 'Luz María Olmos Ramírez' loggeado.
+2025-08-27 07:10:06,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-27 07:29:42,LOGIN,'Luz María Olmos Ramírez' (LO) ha iniciado sesión.
+2025-08-27 07:35:28,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-27 07:35:37,SERIAL,Número serial reestablecido: 000009
+2025-08-27 07:35:37,ERROR,Serial 000009 - PLC falló: No se pudo conectar al PLC
+2025-08-27 07:50:15,APP_EXIT,Aplicación cerrada con usuario 'Luz María Olmos Ramírez' loggeado.
+2025-08-27 07:51:41,LOGIN,'Luz María Olmos Ramírez' (LO) ha iniciado sesión.
+2025-08-27 07:51:51,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-27 07:51:56,SERIAL,Número serial reestablecido: 000009
+2025-08-27 07:51:56,ERROR,Serial 000009 - PLC falló: No se pudo conectar al PLC
+2025-08-27 08:01:55,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-27 08:02:04,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-27 08:02:08,SERIAL,Número serial reestablecido: 099999
+2025-08-27 08:02:08,ERROR,Serial 099999 - PLC falló: No se pudo conectar al PLC
+2025-08-27 08:03:07,AUTH,Acceso autorizado para reestablecer serial - Usuario: ADMIN
+2025-08-27 08:03:11,SERIAL,Número serial reestablecido: 888888
+2025-08-27 08:03:11,ERROR,Serial 888888 - PLC falló: No se pudo conectar al PLC
+2025-08-27 08:03:22,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-27 08:23:51,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-27 09:08:57,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-27 09:36:27,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-27 09:37:09,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-27 10:07:47,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-27 10:09:51,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-27 10:10:32,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-27 10:10:48,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-27 10:11:25,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-27 10:11:35,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-27 10:20:46,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-27 10:24:37,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-27 10:24:44,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-27 11:23:37,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-27 11:23:45,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.
+2025-08-27 11:46:16,APP_EXIT,Aplicación cerrada (usuario no loggeado).
+2025-08-27 12:18:14,LOGIN,'Alejandro Tejeda' (AT) ha iniciado sesión.
+2025-08-27 12:18:38,APP_EXIT,Aplicación cerrada con usuario 'Alejandro Tejeda' loggeado.

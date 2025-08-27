@@ -1,3 +1,7 @@
 2025-08-26 14:36:31,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
 2025-08-26 14:36:31,ERROR,Init schema error: 2003: Can't connect to MySQL server on '10.4.0.103:3306' (10065 A socket operation was attempted to an unreachable host)
 2025-08-26 14:36:31,WARNING,No se pudo conectar a MySQL para crear tabla de producción
+2025-08-27 07:35:37,ERROR,Serial 000009 - PLC falló: No se pudo conectar al PLC
+2025-08-27 07:51:56,ERROR,Serial 000009 - PLC falló: No se pudo conectar al PLC
+2025-08-27 08:02:08,ERROR,Serial 099999 - PLC falló: No se pudo conectar al PLC
+2025-08-27 08:03:11,ERROR,Serial 888888 - PLC falló: No se pudo conectar al PLC
