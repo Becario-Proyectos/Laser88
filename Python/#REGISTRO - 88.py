@@ -817,9 +817,14 @@ def registrar_datos_partes():
         messagebox.showwarning("Campo vacío", "Por favor ingresa el número de parte.")
         return
     
+    # Validar que Numero_parte solo contenga dígitos
+    if not numero_parte.isdigit():
+        messagebox.showwarning("Entrada no válida", "El número de parte solo debe contener dígitos.")
+        return
+    
     # Validar que Numero_parte tenga sólo entre 6 y 7 caracteres
     if not (6 <= len(numero_parte) <= 7):
-        messagebox.showwarning("Entrada no válida", "El número de parte debe tener entre 6 y 7 caracteres.")
+        messagebox.showwarning("Entrada no válida", "El número de parte debe tener entre 6 y 7 dígitos.")
         return
 
     if not numero_cat:
